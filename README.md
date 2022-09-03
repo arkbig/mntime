@@ -1,12 +1,12 @@
 # mntime command
 
-This `mntime` command internally uses [gnu-time][gtime] to calculate the mean.
+This `mntime` command internally uses [gnu-time][gtime] to calculate the mean.(Optionally, regular `time` command can be used.)
 
 [gtime]:https://www.gnu.org/software/time/
 
 [gnu-time][gtime] is like an extension of the `time` command, allowing you to measure memory usage as well as execution time.
 
-The project name comes from **m** commands and **n** times and also from **m**ea**n**.
+The project name comes from **m** commands and **n** times and also from **m**ea**n**. Besides, it is taken from **m**ultiple **n**umber **time**.
 
 So, `mntime` executes the specified m commands n times and calculates the mean.
 
@@ -54,6 +54,18 @@ mntime sleep 1 -- sleep 0.9 -- sleep 1.1
 TODO: result
 
 When multiple commands are specified in this way, each is executed n times, the mean is calculated, and comparisons are made.
+
+If only a command with no arguments is specified, the 'command' enclosure cannot be specified. "--" delimiters should be used. It is possible to mix both. For example,
+
+```sh
+# All the same
+mntime 'command1 --flag arg' command2 -- 'command3 -f -- args'
+mntime 'command1' --flag arg -- command2 -- 'command3 -f -- args'
+## Following is recommended
+mntime command1 --flag arg -- command2 -- 'command3 -f -- args'
+```
+
+"--" delimiters are recommended, except when they contain " -- ".
 
 ## Alternative tools
 

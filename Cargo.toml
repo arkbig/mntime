@@ -1,8 +1,16 @@
 [package]
 name = "mntime"
 version = "0.1.0"
+authors = ["arkbig"]
 edition = "2021"
+description = "The mntime command executes the specified \"m\" commands \"n\" times and calculates the mean \"μ\"(\\mu) of usage time and memory."
+readme = "README.md"
+repository = "https://github.com/arkbig/mntime"
+license = "Zlib"
+keywords = ["time"]
+categories = ["command-line-utilities", "development-tools::profiling"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.2.20", features = ["derive"] }
