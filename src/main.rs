@@ -2,7 +2,8 @@ use clap::{AppSettings, Parser};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    style::{Print, Attribute, SetAttribute},
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::{
     error::Error,
@@ -13,8 +14,8 @@ use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Span,
-    widgets::{Block, Borders, Gauge},
+    text::{Span, Spans},
+    widgets::{Block, Gauge, Paragraph},
     Frame, Terminal,
 };
 
@@ -50,12 +51,14 @@ struct CliArgs {
 }
 
 struct App {
+    current: u16,
     progress: u16,
 }
 
 impl App {
     fn new() -> App {
         App {
+            current: 0,
             progress: 0,
         }
     }
@@ -74,7 +77,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    // execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -85,11 +88,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // restore terminal
     disable_raw_mode()?;
-    // execute!(
-    //     terminal.backend_mut(),
-    //     LeaveAlternateScreen,
-    //     DisableMouseCapture
-    // )?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture
+    )?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
@@ -107,7 +109,18 @@ fn run_app<B: Backend>(
     let mut last_tick = Instant::now();
     let cur = terminal.get_cursor()?;
     let mut cursor_y = cur.1;
+
     loop {
+        if app.current == 0 {
+            app.current += 1;
+            execute!(
+                io::stdout(),
+                SetAttribute(Attribute::Bold),
+                Print(format!("Benchmark #{}", app.current)),
+                SetAttribute(Attribute::Reset),
+            );
+            cursor_y += 1;
+        }
         terminal.draw(|f| ui(f, &mut cursor_y, &app))?;
 
         let timeout = tick_rate
@@ -132,15 +145,35 @@ fn run_app<B: Backend>(
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, cursor_y: &mut u16, app: &App) {
-    let height = 2;
+    let height = 1;
     let size = f.size();
     while size.height < *cursor_y + height {
         println!();
         *cursor_y -= 1;
     }
+
+    let rect = Rect::new(0, *cursor_y, size.width, height);
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Length(20),
+                Constraint::Percentage(100),
+            ]
+            .as_ref(),
+        )
+        .split(rect);
+
+    let text = vec![
+        Spans::from(vec![
+            Span::raw("Running..."),
+        ])
+    ];
+    let paragraph = Paragraph::new(text);
+    f.render_widget(paragraph, chunks[0]);
+
     let label = format!("{}/10", app.progress);
     let gauge = Gauge::default()
-        .block(Block::default().title("Progress"))
         .gauge_style(
             Style::default()
                 .fg(Color::Cyan)
@@ -148,5 +181,5 @@ fn ui<B: Backend>(f: &mut Frame<B>, cursor_y: &mut u16, app: &App) {
         )
         .percent(app.progress * 10)
         .label(label);
-    f.render_widget(gauge, Rect::new(0, *cursor_y, size.width, height));
+    f.render_widget(gauge, chunks[1]);
 }
