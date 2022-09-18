@@ -1,8 +1,8 @@
 [package]
 name = "mntime"
 version = "0.1.0"
-authors = ["arkbig"]
 edition = "2021"
+authors = ["arkbig"]
 description = "The mntime command executes the specified \"m\" commands \"n\" times and calculates the mean \"μ\"(\\mu) of usage time and memory."
 readme = "README.md"
 repository = "https://github.com/arkbig/mntime"
@@ -13,6 +13,11 @@ categories = ["command-line-utilities", "development-tools::profiling"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.65"
+atty = "0.2.14"
 clap = { version = "3.2.20", features = ["derive"] }
 crossterm = "0.25.0"
+proc-exit = "1.0.3"
+thiserror = "1.0.35"
+throbber-widgets-tui = { git = "https://github.com/arkbig/throbber-widgets-tui", version = "0.1.0" }
 tui = "0.19.0"
