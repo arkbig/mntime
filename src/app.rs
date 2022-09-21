@@ -1,39 +1,61 @@
-use clap::Parser;
+use std::io::Read;
 
-/// Command Line Arguments
-#[derive(Debug, Parser)]
-#[clap(author, version, about, long_about = None, setting = clap::builder::AppSettings::TrailingVarArg | clap::builder::AppSettings::DeriveDisplayOrder)]
-struct CliArgs {
-    /// Perform exactly NUM runs for each command.
-    #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 5)]
-    runs: u16,
+pub fn run() -> proc_exit::ExitResult {
+    let _args = crate::cli_args::parse();
 
-    /// Time command used.
-    #[clap(
-        short = 'T',
-        long,
-        value_parser,
-        value_name = "COMMAND",
-        default_value = "gtime"
-    )]
-    time_command: String,
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        finalize_cli();
+        default_panic_hook(panic_info);
+    }));
+    struct CliFinalizer;
+    impl Drop for CliFinalizer {
+        fn drop(&mut self) {
+            finalize_cli();
+        }
+    }
+    let _cli_finalizer = CliFinalizer;
+    initialize_cli();
 
-    /// Arguments of the time command used.
-    ///
-    /// Quoting if flag is included or there are multiple args.
-    #[clap(short, long, value_parser, value_name = "ARGS", default_value = "")]
-    time_args: String,
+    let backend = tui::backend::CrosstermBackend::new(std::io::stdout());
+    let mut terminal = crate::terminal::Wrapper::new(backend);
 
-    /// The commands to benchmark.
-    ///
-    /// If multiple commands are specified, each is executed and compared.
-    /// One command is specified with "--" delimiters (recommended) or quotation.
-    /// However, in the case of command-only quotation marks,
-    /// the subsequent ones are considered to be the arguments of the command.
-    ///
-    /// e.g.) mntime command1 --flag arg -- command2 -- 'command3 -f -- args'
-    #[clap(value_parser)]
-    commands: Vec<String>,
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let tick_rate = std::time::Duration::from_millis(100);
+    let app = App::new();
+    // If proc_exit::Exit had implemented Send, it could have returned it as is...
+    let thread: std::thread::JoinHandle<(proc_exit::Code, Option<String>)> =
+        std::thread::Builder::new()
+            .name("App".to_string())
+            .spawn(move || run_app(rx, &mut terminal, app, tick_rate))
+            .unwrap();
+
+    while !thread.is_finished() {
+        if crossterm::event::poll(tick_rate).unwrap() {
+            if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
+                use crossterm::event::{KeyCode, KeyModifiers};
+                match (key.code, key.modifiers) {
+                    (KeyCode::Char('c'), KeyModifiers::CONTROL)
+                    | (KeyCode::Char('q'), KeyModifiers::NONE) => tx.send(Msg::Quit).unwrap(),
+                    (KeyCode::Char('t'), KeyModifiers::ALT) => tx.send(Msg::TODO).unwrap(),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let ret = thread.join().unwrap();
+    if ret.0 == proc_exit::Code::SUCCESS && None == ret.1 {
+        Ok(())
+    } else {
+        let res = proc_exit::Exit::new(ret.0);
+        if let Some(msg) = ret.1 {
+            Err(res.with_message(msg))
+        } else {
+            Err(res)
+        }
+    }
 }
 
 /// Initialize cli environment. Be sure to call finalize_cli.
@@ -52,6 +74,13 @@ fn finalize_cli() {
         eprintln!("[ERROR] {}", err);
     }
     println!();
+}
+
+//TODO: Turn off warning suppression later.
+#[allow(clippy::upper_case_acronyms)]
+enum Msg {
+    Quit,
+    TODO,
 }
 
 struct App {
@@ -78,42 +107,24 @@ impl App {
     }
 }
 
-pub fn run() -> proc_exit::ExitResult {
-    // let args = CliArgs::parse();
-
-    let default_panic_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        finalize_cli();
-        default_panic_hook(panic_info);
-    }));
-    initialize_cli();
-
-    let backend = tui::backend::CrosstermBackend::new(std::io::stdout());
-    let mut terminal = tui::Terminal::new(backend).unwrap();
-
-    // create app and run it
-    let tick_rate = std::time::Duration::from_millis(100);
-    let app = App::new();
-    let res = run_app(&mut terminal, app, tick_rate);
-
-    finalize_cli();
-    res
-}
-
-fn run_app<B: tui::backend::Backend>(
-    terminal: &mut tui::Terminal<B>,
+fn run_app<B>(
+    rx: std::sync::mpsc::Receiver<Msg>,
+    terminal: &mut crate::terminal::Wrapper<B>,
     mut app: App,
     tick_rate: std::time::Duration,
-) -> proc_exit::ExitResult {
-    let is_in_tty = atty::is(atty::Stream::Stdin);
-    let is_io_tty = is_in_tty && atty::is(atty::Stream::Stdout);
+) -> (proc_exit::Code, Option<String>)
+where
+    B: tui::backend::Backend,
+{
     let mut last_tick = std::time::Instant::now();
-    let cur = if is_io_tty {
-        terminal.get_cursor().unwrap()
-    } else {
-        (0, 0)
-    };
+    let cur = terminal.get_cursor();
     let mut cursor_y = cur.1;
+    let mut time_child = std::process::Command::new("sh")
+        .args(["-c", "gtime sleep 1"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
     loop {
         if app.current == 0 {
             app.current += 1;
@@ -126,28 +137,49 @@ fn run_app<B: tui::backend::Backend>(
             .unwrap();
             cursor_y += 1;
         }
-        if is_io_tty {
-            terminal.draw(|f| ui(f, &mut cursor_y, &mut app)).unwrap();
+        terminal.draw_if_tty(|f| ui(f, &mut cursor_y, &mut app));
+
+        match time_child.try_wait() {
+            Ok(Some(status)) => {
+                if status.success() {
+                    let mut out = String::new();
+                    time_child.stdout.unwrap().read_to_string(&mut out).unwrap();
+                    let mut err = String::new();
+                    time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
+                    println!("\r\nstdout={:?}\r\nstderr={:?}", out, err);
+                    return (proc_exit::Code::SUCCESS, None);
+                } else {
+                    let mut err = String::new();
+                    time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
+                    return (proc_exit::Code::new(status.code().unwrap()), Some(err));
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                let err = format!("{:?}", e);
+                return (proc_exit::Code::FAILURE, Some(err));
+            }
         }
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| std::time::Duration::from_secs(0));
-        if is_in_tty && crossterm::event::poll(timeout).unwrap() {
-            if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
-                if let crossterm::event::KeyCode::Char('q') = key.code {
-                    return Ok(());
-                }
+        let msg = rx.recv_timeout(timeout);
+        match msg {
+            Ok(Msg::Quit) => {
+                time_child.kill().unwrap();
+                return (proc_exit::Code::SUCCESS, None);
             }
-        } else {
-            std::thread::sleep(timeout);
+            Ok(Msg::TODO) => {}
+            _ => {}
         }
+
         if last_tick.elapsed() >= tick_rate {
             app.on_tick();
             last_tick = std::time::Instant::now();
-            if app.progress == 20 {
-                return Ok(());
-            }
+            // if app.progress == 20 {
+            //     return Ok(());
+            // }
         }
     }
 }

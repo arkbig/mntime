@@ -5,6 +5,8 @@
 //! See `mntime --help` for usage.
 
 mod app;
+mod cli_args;
+mod terminal;
 
 fn main() {
     let res = app::run();
