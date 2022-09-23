@@ -145,7 +145,7 @@ where
         //terminal.draw_if_tty(|f| ui(f, &mut cursor_y, &mut app));
 
         match time_child.try_wait() {
-            Ok(Some(status)) => {
+            Ok(Some(_status)) => {
                 let mut err = String::new();
                 time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
                 println!("\r");

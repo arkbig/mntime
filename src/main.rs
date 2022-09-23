@@ -6,6 +6,7 @@
 
 mod app;
 mod cli_args;
+mod mean;
 mod terminal;
 
 fn main() {
