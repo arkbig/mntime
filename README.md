@@ -1,10 +1,12 @@
 # mntime command
 
-This `mntime` command internally uses [gnu-time][gtime] to calculate the mean.(Optionally, regular `time` command can be used.)
+This `mntime` command internally uses [time -l][time] or [gtime -v][gtime](GNU Time) to calculate the mean.
 
-[gtime]:https://www.gnu.org/software/time/
+[time]:https://www.freebsd.org/cgi/man.cgi?query=time
+[gtime]:https://man7.org/linux/man-pages/man1/time.1.html
 
-[gnu-time][gtime] is like an extension of the `time` command, allowing you to measure memory usage as well as execution time.
+The `time -l`[time] option and `gtime -v`[gtime] option measure memory usage as well as execution time.
+If you are only measuring execution time, you can use shell built-in `time` instead.
 
 The project name comes from **m** commands and **n** times and also from **m**ea**n**. Besides, it is taken from **m**ultiple **n**umber **time**.
 
@@ -13,7 +15,6 @@ So, `mntime` executes the specified m commands n times and calculates the mean.
 ## Demo
 
 TODO
-`gnu-time` is required.
 
 ## Installation
 

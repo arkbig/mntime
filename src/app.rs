@@ -1,7 +1,7 @@
 use std::io::Read;
 
 pub fn run() -> proc_exit::ExitResult {
-    let _args = crate::cli_args::parse();
+    let cli_args = crate::cli_args::parse();
 
     let default_panic_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -28,7 +28,7 @@ pub fn run() -> proc_exit::ExitResult {
     let thread: std::thread::JoinHandle<(proc_exit::Code, Option<String>)> =
         std::thread::Builder::new()
             .name("App".to_string())
-            .spawn(move || run_app(rx, &mut terminal, app, tick_rate))
+            .spawn(move || run_app(cli_args, rx, &mut terminal, app, tick_rate))
             .unwrap();
 
     while !thread.is_finished() {
@@ -61,7 +61,7 @@ pub fn run() -> proc_exit::ExitResult {
 /// Initialize cli environment. Be sure to call finalize_cli.
 fn initialize_cli() {
     crossterm::terminal::enable_raw_mode().unwrap();
-    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture).unwrap();
+    //crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture).unwrap();
 }
 
 /// Finalize cli environment. Be sure to call this after initialize_cli.
@@ -69,10 +69,10 @@ fn finalize_cli() {
     if let Err(err) = crossterm::terminal::disable_raw_mode() {
         eprintln!("[ERROR] {}", err);
     }
-    if let Err(err) = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)
-    {
-        eprintln!("[ERROR] {}", err);
-    }
+    // if let Err(err) = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)
+    // {
+    //     eprintln!("[ERROR] {}", err);
+    // }
     println!();
 }
 
@@ -108,6 +108,7 @@ impl App {
 }
 
 fn run_app<B>(
+    cli_args: crate::cli_args::CliArgs,
     rx: std::sync::mpsc::Receiver<Msg>,
     terminal: &mut crate::terminal::Wrapper<B>,
     mut app: App,
@@ -116,11 +117,15 @@ fn run_app<B>(
 where
     B: tui::backend::Backend,
 {
+    for command in cli_args.normalized_commands() {
+        println!("{}\r", command);
+    }
+
     let mut last_tick = std::time::Instant::now();
     let cur = terminal.get_cursor();
     let mut cursor_y = cur.1;
     let mut time_child = std::process::Command::new("sh")
-        .args(["-c", "gtime sleep 1"])
+        .args(["-c", "/usr/bin/env time sleep 0"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -137,22 +142,53 @@ where
             .unwrap();
             cursor_y += 1;
         }
-        terminal.draw_if_tty(|f| ui(f, &mut cursor_y, &mut app));
+        //terminal.draw_if_tty(|f| ui(f, &mut cursor_y, &mut app));
 
         match time_child.try_wait() {
             Ok(Some(status)) => {
-                if status.success() {
-                    let mut out = String::new();
-                    time_child.stdout.unwrap().read_to_string(&mut out).unwrap();
-                    let mut err = String::new();
-                    time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
-                    println!("\r\nstdout={:?}\r\nstderr={:?}", out, err);
-                    return (proc_exit::Code::SUCCESS, None);
-                } else {
-                    let mut err = String::new();
-                    time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
-                    return (proc_exit::Code::new(status.code().unwrap()), Some(err));
-                }
+                let mut err = String::new();
+                time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
+                println!("\r");
+                println!("{}", err);
+                // builtin
+                // let re = regex::Regex::new(r"(?P<name>\w+)\t(?P<min>\d+)m(?P<sec>[0-9.]+)s").unwrap();
+                // for cap in re.captures_iter(err.as_str()) {
+                //     let min: f64 = (&cap["min"]).parse().unwrap();
+                //     let sec: f64 = (&cap["sec"]).parse().unwrap();
+                //     println!("{}={}", &cap["name"], min * 60.0 + sec);
+                // }
+                // println!("Exit status={}", status.code().unwrap());
+                // time
+                // let re = regex::Regex::new(r"(?P<sec>[\d.]+) (?P<name>\w+)").unwrap();
+                // for cap in re.captures_iter(err.as_str()) {
+                //     let sec: f64 = (&cap["sec"]).parse().unwrap();
+                //     println!("{}={}", &cap["name"], sec);
+                // }
+                // let re = regex::Regex::new(r"(?P<val>[\d.]+)  (?P<name>[\w ]+)").unwrap();
+                // for cap in re.captures_iter(err.as_str()) {
+                //     let val: f64 = (&cap["val"]).parse().unwrap();
+                //     println!("{}={}", &cap["name"], val);
+                // }
+                // println!("Exit status={}", status.code().unwrap());
+                // gtime
+                // let re = regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap();
+                // for cap in re.captures_iter(err.as_str()) {
+                //     if let Some(sec_match) = cap.name("sec") {
+                //         let hour: f64 = if let Some(hour_match) = cap.name("hour") {
+                //             hour_match.as_str().parse().unwrap()
+                //         } else {
+                //             0.0
+                //         };
+                //         let min: f64 = (&cap["min"]).parse().unwrap();
+                //         let sec: f64 = sec_match.as_str().parse().unwrap();
+                //         println!("{}={}sec", &cap["name"], hour * 60.0 * 60.0 + min * 60.0 + sec);
+                //     } else {
+                //         let val: f64 = (&cap["val"]).parse().unwrap();
+                //         println!("{}={}", &cap["name"], val);
+                //     }
+                // }
+
+                return (proc_exit::Code::SUCCESS, None);
             }
             Ok(None) => {}
             Err(e) => {
