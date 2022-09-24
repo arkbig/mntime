@@ -16,7 +16,7 @@ main-)+main: poll keys
     app-)view: draw command title
     loop n for try count
     app-)view: draw progress
-    app-)+cmd: spawn `sh -c time command`
+    app-)+cmd: execute `sh -c time command`
         cmd--)-app: return output
     end
     app-)view: draw command result
