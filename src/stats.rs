@@ -1,7 +1,7 @@
-/// Statical information such as mean.
+/// Statistics data such as mean.
 #[derive(Default, Debug)]
 #[allow(dead_code)]
-pub struct Mean {
+pub struct Stats {
     /// Sorted population excluding NaN(!finite).
     sorted_population: Vec<f64>, // 母集団
 
@@ -15,10 +15,10 @@ pub struct Mean {
     mad: f64, // 平均絶対偏差
     /// Count of outlier.
     outlier_count: usize, // 外れ値
-    /// Lower threshold of outlier for Hampel Identifier.
-    outlier_lower: f64,
-    /// Upper threshold of outlier for Hampel Identifier.
-    outlier_upper: f64,
+    /// Lower control limit for Hampel Identifier.
+    lcl: f64, // 下限管理限界
+    /// Upper control limit for Hampel Identifier.
+    ucl: f64, // 上限管理限界
 
     /// Mean of all population. (μ)
     mean: f64, // 平均値
@@ -32,7 +32,7 @@ pub struct Mean {
 }
 
 #[allow(dead_code)]
-impl Mean {
+impl Stats {
     /// Statistical calculation and construction.
     fn new(population: Vec<f64>) -> Self {
         if population.is_empty() {
@@ -66,41 +66,41 @@ impl Mean {
 
         // Hampel Identifier of outlier detection.
         let coefficient = 1.4826;
-        let lower = median - 3.0 * coefficient * mad;
-        let upper = median + 3.0 * coefficient * mad;
+        let lcl = median - 3.0 * coefficient * mad; // 下限管理限界
+        let ucl = median + 3.0 * coefficient * mad; // 上限管理限界
         let min = *sorted.first().unwrap();
         let max = *sorted.last().unwrap();
 
-        let outlier_count: usize = if lower <= min && max <= upper {
+        let outlier_count: usize = if lcl <= min && max <= ucl {
             0
         } else {
             sorted.iter().fold(0, |s, r| {
                 let x = *r;
-                if lower <= x && x <= upper {
+                if lcl <= x && x <= ucl {
                     s
                 } else {
                     s + 1
                 }
             })
         };
-        let mean_excluding_outlier = if lower <= min && max <= upper {
+        let mean_excluding_outlier = if lcl <= min && max <= ucl {
             mean
         } else {
             sorted.iter().fold(0.0, |s, r| {
                 let x = *r;
-                if lower <= x && x <= upper {
+                if lcl <= x && x <= ucl {
                     s + x
                 } else {
                     s
                 }
             }) / (count - outlier_count) as f64
         };
-        let stdev_excluding_outlier = if lower <= min && max <= upper {
+        let stdev_excluding_outlier = if lcl <= min && max <= ucl {
             standard_deviation
         } else {
             let variance_excluding_outlier = sorted.iter().fold(0.0, |s, r| {
                 let x = *r;
-                if lower <= x && x <= upper {
+                if lcl <= x && x <= ucl {
                     s + (x - mean_excluding_outlier).powi(2)
                 } else {
                     s
@@ -116,8 +116,8 @@ impl Mean {
             median,
             mad,
             outlier_count,
-            outlier_lower: lower,
-            outlier_upper: upper,
+            lcl,
+            ucl,
             mean,
             mean_excluding_outlier,
             stdev: standard_deviation,
@@ -203,14 +203,14 @@ mod test {
     #[test]
     fn mean_calculate_normal() {
         let population = vec![3.0, 2.9, 3.1, 2.95, 3.05];
-        let mean = Mean::new(population);
+        let mean = Stats::new(population);
         assert_eq!(mean.sorted_population, vec![2.9, 2.95, 3.0, 3.05, 3.1]);
         assert_eq!(mean.nan_count, 0);
         assert_eq!(mean.median, 3.0);
         assert_ulps_eq!(mean.mad, 0.06);
         assert_eq!(mean.outlier_count, 0);
-        assert_ulps_eq!(mean.outlier_lower, 3.0 - 3.0 * 1.4826 * 0.06);
-        assert_ulps_eq!(mean.outlier_upper, 3.0 + 3.0 * 1.4826 * 0.06);
+        assert_ulps_eq!(mean.lcl, 3.0 - 3.0 * 1.4826 * 0.06);
+        assert_ulps_eq!(mean.ucl, 3.0 + 3.0 * 1.4826 * 0.06);
         assert_ulps_eq!(mean.mean, 3.0);
         assert_ulps_eq!(mean.mean_excluding_outlier, mean.mean);
         assert_ulps_eq!(mean.stdev, 0.07071067811865475);
@@ -224,7 +224,7 @@ mod test {
     #[test]
     fn mean_calculate_outlier() {
         let population = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
-        let mean = Mean::new(population);
+        let mean = Stats::new(population);
         assert_eq!(
             mean.sorted_population,
             vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
@@ -233,8 +233,8 @@ mod test {
         assert_eq!(mean.median, 3.0);
         assert_ulps_eq!(mean.mad, 1.4714285714285715);
         assert_eq!(mean.outlier_count, 1);
-        assert_ulps_eq!(mean.outlier_lower, 3.0 - 3.0 * 1.4826 * 1.4714285714285715);
-        assert_ulps_eq!(mean.outlier_upper, 3.0 + 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(mean.lcl, 3.0 - 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(mean.ucl, 3.0 + 3.0 * 1.4826 * 1.4714285714285715);
         assert_ulps_eq!(mean.mean, 3.5714285714285716);
         assert_ulps_eq!(mean.mean_excluding_outlier, 2.5);
         assert_ulps_eq!(mean.stdev, 2.8218354137052035);

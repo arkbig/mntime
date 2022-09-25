@@ -1,5 +1,3 @@
-use std::io::Read;
-
 pub fn run() -> proc_exit::ExitResult {
     let cli_args = crate::cli_args::parse();
 
@@ -23,7 +21,7 @@ pub fn run() -> proc_exit::ExitResult {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let tick_rate = std::time::Duration::from_millis(100);
-    let app = App::new();
+    let app = App::default();
     // If proc_exit::Exit had implemented Send, it could have returned it as is...
     let thread: std::thread::JoinHandle<(proc_exit::Code, Option<String>)> =
         std::thread::Builder::new()
@@ -83,21 +81,15 @@ enum Msg {
     TODO,
 }
 
+#[derive(Default)]
 struct App {
     current: u16,
     progress: u16,
     throbber_state: throbber_widgets_tui::ThrobberState,
+    cmd: Option<Box<dyn crate::cmd::Cmd + Send + Sync>>,
 }
 
 impl App {
-    fn new() -> App {
-        App {
-            current: 0,
-            progress: 0,
-            throbber_state: throbber_widgets_tui::ThrobberState::default(),
-        }
-    }
-
     fn on_tick(&mut self) {
         self.progress += 1;
         if self.progress > 100 {
@@ -124,12 +116,14 @@ where
     let mut last_tick = std::time::Instant::now();
     let cur = terminal.get_cursor();
     let mut cursor_y = cur.1;
-    let mut time_child = std::process::Command::new("sh")
-        .args(["-c", "/usr/bin/env time sleep 0"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut is_checking = true;
+
+    match crate::cmd::BuiltinCmd::try_new() {
+        Ok(cmd) => {app.cmd = Some(Box::new(cmd));},
+        Err(err) => {
+            return (proc_exit::Code::FAILURE, Some(format!("{:}", err)));
+        }
+    }
     loop {
         if app.current == 0 {
             app.current += 1;
@@ -144,12 +138,29 @@ where
         }
         //terminal.draw_if_tty(|f| ui(f, &mut cursor_y, &mut app));
 
-        match time_child.try_wait() {
-            Ok(Some(_status)) => {
-                let mut err = String::new();
-                time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
-                println!("\r");
-                println!("{}", err);
+        let cmd = app.cmd.as_mut().unwrap();
+        match cmd.ready_status() {
+            crate::cmd::ReadyStatus::Checking => {},
+            crate::cmd::ReadyStatus::Error => {panic!("NOT READY")},
+            crate::cmd::ReadyStatus::Ready => {
+                if is_checking {
+                    is_checking = false;
+                    cmd.execute("sleep 1").unwrap();
+                } else if cmd.is_finished() {
+                    for kvp in cmd.get_report().unwrap() {
+                        println!("\r\n{}={}", crate::cmd::meas_item_name(&kvp.0), kvp.1);
+                    }
+                    return (proc_exit::Code::SUCCESS, None);
+                }
+            }
+        }
+
+        // match time_child.try_wait() {
+        //     Ok(Some(_status)) => {
+                // let mut err = String::new();
+                // time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
+                // println!("\r");
+                // println!("{}", err);
                 // builtin
                 // let re = regex::Regex::new(r"(?P<name>\w+)\t(?P<min>\d+)m(?P<sec>[0-9.]+)s").unwrap();
                 // for cap in re.captures_iter(err.as_str()) {
@@ -188,14 +199,14 @@ where
                 //     }
                 // }
 
-                return (proc_exit::Code::SUCCESS, None);
-            }
-            Ok(None) => {}
-            Err(e) => {
-                let err = format!("{:?}", e);
-                return (proc_exit::Code::FAILURE, Some(err));
-            }
-        }
+            //     return (proc_exit::Code::SUCCESS, None);
+            // }
+        //     Ok(None) => {}
+        //     Err(e) => {
+        //         let err = format!("{:?}", e);
+        //         return (proc_exit::Code::FAILURE, Some(err));
+        //     }
+        // }
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
@@ -203,7 +214,7 @@ where
         let msg = rx.recv_timeout(timeout);
         match msg {
             Ok(Msg::Quit) => {
-                time_child.kill().unwrap();
+                cmd.kill();
                 return (proc_exit::Code::SUCCESS, None);
             }
             Ok(Msg::TODO) => {}

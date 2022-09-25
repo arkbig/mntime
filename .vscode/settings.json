@@ -1,8 +1,10 @@
 {
     "cSpell.words": [
+        "getrusage",
         "mntime",
         "powi",
         "stdev",
+        "thiserror",
         "ulps",
         "ultiple"
     ]
