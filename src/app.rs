@@ -82,14 +82,14 @@ enum Msg {
 }
 
 #[derive(Default)]
-struct App {
+struct App<'a> {
     current: u16,
     progress: u16,
     throbber_state: throbber_widgets_tui::ThrobberState,
-    cmd: Option<Box<dyn crate::cmd::Cmd + Send + Sync>>,
+    cmd: Option<crate::cmd::TimeCmd<'a>>,
 }
 
-impl App {
+impl<'a> App<'a> {
     fn on_tick(&mut self) {
         self.progress += 1;
         if self.progress > 100 {
@@ -118,8 +118,10 @@ where
     let mut cursor_y = cur.1;
     let mut is_checking = true;
 
-    match crate::cmd::BuiltinCmd::try_new() {
-        Ok(cmd) => {app.cmd = Some(Box::new(cmd));},
+    match crate::cmd::try_new_gnu_time(true) {
+        Ok(cmd) => {
+            app.cmd = Some(cmd);
+        }
         Err(err) => {
             return (proc_exit::Code::FAILURE, Some(format!("{:}", err)));
         }
@@ -140,15 +142,19 @@ where
 
         let cmd = app.cmd.as_mut().unwrap();
         match cmd.ready_status() {
-            crate::cmd::ReadyStatus::Checking => {},
-            crate::cmd::ReadyStatus::Error => {panic!("NOT READY")},
+            crate::cmd::ReadyStatus::Checking => {}
+            crate::cmd::ReadyStatus::Error => {
+                panic!("NOT READY")
+            }
             crate::cmd::ReadyStatus::Ready => {
                 if is_checking {
                     is_checking = false;
                     cmd.execute("sleep 1").unwrap();
                 } else if cmd.is_finished() {
-                    for kvp in cmd.get_report().unwrap() {
-                        println!("\r\n{}={}", crate::cmd::meas_item_name(&kvp.0), kvp.1);
+                    if let Ok(report) = cmd.get_report() {
+                        for kvp in report {
+                            println!("\r{}={}", crate::cmd::meas_item_name(&kvp.0), kvp.1);
+                        }
                     }
                     return (proc_exit::Code::SUCCESS, None);
                 }
@@ -157,50 +163,50 @@ where
 
         // match time_child.try_wait() {
         //     Ok(Some(_status)) => {
-                // let mut err = String::new();
-                // time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
-                // println!("\r");
-                // println!("{}", err);
-                // builtin
-                // let re = regex::Regex::new(r"(?P<name>\w+)\t(?P<min>\d+)m(?P<sec>[0-9.]+)s").unwrap();
-                // for cap in re.captures_iter(err.as_str()) {
-                //     let min: f64 = (&cap["min"]).parse().unwrap();
-                //     let sec: f64 = (&cap["sec"]).parse().unwrap();
-                //     println!("{}={}", &cap["name"], min * 60.0 + sec);
-                // }
-                // println!("Exit status={}", status.code().unwrap());
-                // time
-                // let re = regex::Regex::new(r"(?P<sec>[\d.]+) (?P<name>\w+)").unwrap();
-                // for cap in re.captures_iter(err.as_str()) {
-                //     let sec: f64 = (&cap["sec"]).parse().unwrap();
-                //     println!("{}={}", &cap["name"], sec);
-                // }
-                // let re = regex::Regex::new(r"(?P<val>[\d.]+)  (?P<name>[\w ]+)").unwrap();
-                // for cap in re.captures_iter(err.as_str()) {
-                //     let val: f64 = (&cap["val"]).parse().unwrap();
-                //     println!("{}={}", &cap["name"], val);
-                // }
-                // println!("Exit status={}", status.code().unwrap());
-                // gtime
-                // let re = regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap();
-                // for cap in re.captures_iter(err.as_str()) {
-                //     if let Some(sec_match) = cap.name("sec") {
-                //         let hour: f64 = if let Some(hour_match) = cap.name("hour") {
-                //             hour_match.as_str().parse().unwrap()
-                //         } else {
-                //             0.0
-                //         };
-                //         let min: f64 = (&cap["min"]).parse().unwrap();
-                //         let sec: f64 = sec_match.as_str().parse().unwrap();
-                //         println!("{}={}sec", &cap["name"], hour * 60.0 * 60.0 + min * 60.0 + sec);
-                //     } else {
-                //         let val: f64 = (&cap["val"]).parse().unwrap();
-                //         println!("{}={}", &cap["name"], val);
-                //     }
-                // }
+        // let mut err = String::new();
+        // time_child.stderr.unwrap().read_to_string(&mut err).unwrap();
+        // println!("\r");
+        // println!("{}", err);
+        // builtin
+        // let re = regex::Regex::new(r"(?P<name>\w+)\t(?P<min>\d+)m(?P<sec>[0-9.]+)s").unwrap();
+        // for cap in re.captures_iter(err.as_str()) {
+        //     let min: f64 = (&cap["min"]).parse().unwrap();
+        //     let sec: f64 = (&cap["sec"]).parse().unwrap();
+        //     println!("{}={}", &cap["name"], min * 60.0 + sec);
+        // }
+        // println!("Exit status={}", status.code().unwrap());
+        // time
+        // let re = regex::Regex::new(r"(?P<sec>[\d.]+) (?P<name>\w+)").unwrap();
+        // for cap in re.captures_iter(err.as_str()) {
+        //     let sec: f64 = (&cap["sec"]).parse().unwrap();
+        //     println!("{}={}", &cap["name"], sec);
+        // }
+        // let re = regex::Regex::new(r"(?P<val>[\d.]+)  (?P<name>[\w ]+)").unwrap();
+        // for cap in re.captures_iter(err.as_str()) {
+        //     let val: f64 = (&cap["val"]).parse().unwrap();
+        //     println!("{}={}", &cap["name"], val);
+        // }
+        // println!("Exit status={}", status.code().unwrap());
+        // gtime
+        // let re = regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap();
+        // for cap in re.captures_iter(err.as_str()) {
+        //     if let Some(sec_match) = cap.name("sec") {
+        //         let hour: f64 = if let Some(hour_match) = cap.name("hour") {
+        //             hour_match.as_str().parse().unwrap()
+        //         } else {
+        //             0.0
+        //         };
+        //         let min: f64 = (&cap["min"]).parse().unwrap();
+        //         let sec: f64 = sec_match.as_str().parse().unwrap();
+        //         println!("{}={}sec", &cap["name"], hour * 60.0 * 60.0 + min * 60.0 + sec);
+        //     } else {
+        //         let val: f64 = (&cap["val"]).parse().unwrap();
+        //         println!("{}={}", &cap["name"], val);
+        //     }
+        // }
 
-            //     return (proc_exit::Code::SUCCESS, None);
-            // }
+        //     return (proc_exit::Code::SUCCESS, None);
+        // }
         //     Ok(None) => {}
         //     Err(e) => {
         //         let err = format!("{:?}", e);

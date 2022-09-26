@@ -8,9 +8,6 @@ pub struct Stats {
     /// Count of !finite.
     nan_count: usize,
 
-    /// Median of all population.
-    median: f64, // 中央値
-
     // Median absolute deviation.
     mad: f64, // 平均絶対偏差
     /// Count of outlier.
@@ -35,18 +32,26 @@ pub struct Stats {
 impl Stats {
     /// Statistical calculation and construction.
     fn new(population: Vec<f64>) -> Self {
-        if population.is_empty() {
-            return Self::default();
+        let sorted = sort_only_finite(&population);
+        let nan_count = population.len() - sorted.len();
+        let mut instance = Self {
+            sorted_population: sorted,
+            nan_count: nan_count,
+            ..Default::default()
+        };
+        instance.calc();
+        instance
+    }
+
+    /// Recalculate from self.sorted_population.
+    fn calc(&mut self) {
+        // Add, but not remove. So, the values remain unchanged.
+        if self.sorted_population.is_empty() {
+            return;
         };
 
-        let sorted = sort_only_finite(&population);
+        let sorted = &self.sorted_population;
         let count = sorted.len();
-        if count == 0 {
-            return Self {
-                outlier_count: population.len(),
-                ..Default::default()
-            };
-        }
 
         let median = sorted[count / 2];
         let sum: f64 = sorted.iter().sum();
@@ -54,7 +59,7 @@ impl Stats {
 
         let mut variance = 0.0; // 分散
         let mut mad = 0.0; // 中央絶対偏差
-        for r in &sorted {
+        for r in sorted {
             let x = *r;
             // It's probably in the range of not overflowing, so divide it later.
             variance += (x - mean).powi(2);
@@ -109,25 +114,42 @@ impl Stats {
             variance_excluding_outlier.sqrt()
         };
 
-        // construction.
-        Self {
-            sorted_population: sorted,
-            nan_count: population.len() - count,
-            median,
-            mad,
-            outlier_count,
-            lcl,
-            ucl,
-            mean,
-            mean_excluding_outlier,
-            stdev: standard_deviation,
-            stdev_excluding_outlier,
+        // Reconstruction
+        self.mad = mad;
+        self.outlier_count = outlier_count;
+        self.lcl = lcl;
+        self.ucl = ucl;
+        self.mean = mean;
+        self.mean_excluding_outlier = mean_excluding_outlier;
+        self.stdev = standard_deviation;
+        self.stdev_excluding_outlier = stdev_excluding_outlier;
+    }
+
+    /// Add to sample value
+    fn add(&mut self, val: f64) {
+        if !val.is_finite() {
+            self.nan_count += 1;
+            return;
         }
+
+        let index = bisect_right(
+            &self.sorted_population,
+            val,
+            0,
+            self.sorted_population.len(),
+        );
+        self.sorted_population.insert(index, val);
+        self.calc();
     }
 
     /// The number of samples is len().
     fn count(&self) -> usize {
         self.sorted_population.len()
+    }
+
+    /// The middle of samples
+    fn median(&self) -> f64 {
+        self.sorted_population[self.sorted_population.len() / 2]
     }
     /// The minimum of samples
     fn min(&self) -> f64 {
@@ -200,49 +222,108 @@ fn search_right(sorted: &[f64], x: f64, lo: usize, hi: usize) -> usize {
 mod test {
     use super::*;
     use approx::*;
+
     #[test]
-    fn mean_calculate_normal() {
+    fn stats_calculate_normal() {
         let population = vec![3.0, 2.9, 3.1, 2.95, 3.05];
-        let mean = Stats::new(population);
-        assert_eq!(mean.sorted_population, vec![2.9, 2.95, 3.0, 3.05, 3.1]);
-        assert_eq!(mean.nan_count, 0);
-        assert_eq!(mean.median, 3.0);
-        assert_ulps_eq!(mean.mad, 0.06);
-        assert_eq!(mean.outlier_count, 0);
-        assert_ulps_eq!(mean.lcl, 3.0 - 3.0 * 1.4826 * 0.06);
-        assert_ulps_eq!(mean.ucl, 3.0 + 3.0 * 1.4826 * 0.06);
-        assert_ulps_eq!(mean.mean, 3.0);
-        assert_ulps_eq!(mean.mean_excluding_outlier, mean.mean);
-        assert_ulps_eq!(mean.stdev, 0.07071067811865475);
-        assert_ulps_eq!(mean.stdev_excluding_outlier, mean.stdev);
-        assert_eq!(mean.count(), 5);
-        assert_eq!(mean.min(), 2.9);
-        assert_eq!(mean.max(), 3.1);
-        assert_eq!(mean.has_outlier(), false);
+        let stats = Stats::new(population);
+        assert_eq!(stats.sorted_population, vec![2.9, 2.95, 3.0, 3.05, 3.1]);
+        assert_eq!(stats.nan_count, 0);
+        assert_ulps_eq!(stats.mad, 0.06);
+        assert_eq!(stats.outlier_count, 0);
+        assert_ulps_eq!(stats.lcl, 3.0 - 3.0 * 1.4826 * 0.06);
+        assert_ulps_eq!(stats.ucl, 3.0 + 3.0 * 1.4826 * 0.06);
+        assert_ulps_eq!(stats.mean, 3.0);
+        assert_ulps_eq!(stats.mean_excluding_outlier, stats.mean);
+        assert_ulps_eq!(stats.stdev, 0.07071067811865475);
+        assert_ulps_eq!(stats.stdev_excluding_outlier, stats.stdev);
+        assert_eq!(stats.count(), 5);
+        assert_eq!(stats.median(), 3.0);
+        assert_eq!(stats.min(), 2.9);
+        assert_eq!(stats.max(), 3.1);
+        assert_eq!(stats.has_outlier(), false);
     }
 
     #[test]
-    fn mean_calculate_outlier() {
+    fn stats_calculate_outlier() {
         let population = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
-        let mean = Stats::new(population);
+        let stats = Stats::new(population);
         assert_eq!(
-            mean.sorted_population,
+            stats.sorted_population,
             vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
-        assert_eq!(mean.nan_count, 0);
-        assert_eq!(mean.median, 3.0);
-        assert_ulps_eq!(mean.mad, 1.4714285714285715);
-        assert_eq!(mean.outlier_count, 1);
-        assert_ulps_eq!(mean.lcl, 3.0 - 3.0 * 1.4826 * 1.4714285714285715);
-        assert_ulps_eq!(mean.ucl, 3.0 + 3.0 * 1.4826 * 1.4714285714285715);
-        assert_ulps_eq!(mean.mean, 3.5714285714285716);
-        assert_ulps_eq!(mean.mean_excluding_outlier, 2.5);
-        assert_ulps_eq!(mean.stdev, 2.8218354137052035);
-        assert_ulps_eq!(mean.stdev_excluding_outlier, 1.1198958284888227);
-        assert_eq!(mean.count(), 7);
-        assert_eq!(mean.min(), 0.0);
-        assert_eq!(mean.max(), 10.0);
-        assert_eq!(mean.has_outlier(), true);
+        assert_eq!(stats.nan_count, 0);
+        assert_ulps_eq!(stats.mad, 1.4714285714285715);
+        assert_eq!(stats.outlier_count, 1);
+        assert_ulps_eq!(stats.lcl, 3.0 - 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(stats.ucl, 3.0 + 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(stats.mean, 3.5714285714285716);
+        assert_ulps_eq!(stats.mean_excluding_outlier, 2.5);
+        assert_ulps_eq!(stats.stdev, 2.8218354137052035);
+        assert_ulps_eq!(stats.stdev_excluding_outlier, 1.1198958284888227);
+        assert_eq!(stats.count(), 7);
+        assert_eq!(stats.median(), 3.0);
+        assert_eq!(stats.min(), 0.0);
+        assert_eq!(stats.max(), 10.0);
+        assert_eq!(stats.has_outlier(), true);
+    }
+
+    #[test]
+    fn stats_add() {
+        let population = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
+        let mut stats = Stats::new(population);
+        assert_eq!(
+            stats.sorted_population,
+            vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
+        );
+        assert_eq!(stats.nan_count, 0);
+        assert_ulps_eq!(stats.mad, 1.4714285714285715);
+        assert_eq!(stats.outlier_count, 1);
+        assert_ulps_eq!(stats.lcl, 3.0 - 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(stats.ucl, 3.0 + 3.0 * 1.4826 * 1.4714285714285715);
+        assert_ulps_eq!(stats.mean, 3.5714285714285716);
+        assert_ulps_eq!(stats.mean_excluding_outlier, 2.5);
+        assert_ulps_eq!(stats.stdev, 2.8218354137052035);
+        assert_ulps_eq!(stats.stdev_excluding_outlier, 1.1198958284888227);
+        assert_eq!(stats.count(), 7);
+        assert_eq!(stats.median(), 3.0);
+        assert_eq!(stats.min(), 0.0);
+        assert_eq!(stats.max(), 10.0);
+        assert_eq!(stats.has_outlier(), true);
+
+        stats.add(f64::INFINITY);
+        assert_eq!(
+            stats.sorted_population,
+            vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
+        );
+        assert_eq!(stats.nan_count, 1);
+
+        stats.add(2.95);
+        assert_eq!(
+            stats.sorted_population,
+            vec![0.0, 2.9, 2.95, 2.95, 3.0, 3.05, 3.1, 10.0]
+        );
+        assert_eq!(stats.nan_count, 1);
+        assert_ulps_eq!(stats.mad, 1.29375);
+        assert_eq!(stats.outlier_count, 1);
+        assert_ulps_eq!(stats.lcl, 3.0 - 3.0 * 1.4826 * 1.29375);
+        assert_ulps_eq!(stats.ucl, 3.0 + 3.0 * 1.4826 * 1.29375);
+        assert_ulps_eq!(stats.mean, 3.4937500000000004);
+        assert_ulps_eq!(stats.mean_excluding_outlier, 2.5642857142857145);
+        assert_ulps_eq!(stats.stdev, 2.647574066480483);
+        assert_ulps_eq!(stats.stdev_excluding_outlier, 1.0487115515561687);
+        assert_eq!(stats.count(), 8);
+        assert_eq!(stats.median(), 3.0);
+        assert_eq!(stats.min(), 0.0);
+        assert_eq!(stats.max(), 10.0);
+        assert_eq!(stats.has_outlier(), true);
+
+        stats.add(f64::NAN);
+        assert_eq!(
+            stats.sorted_population,
+            vec![0.0, 2.9, 2.95, 2.95, 3.0, 3.05, 3.1, 10.0]
+        );
+        assert_eq!(stats.nan_count, 2);
     }
 
     #[test]
