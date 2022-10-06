@@ -2,55 +2,55 @@
 #[derive(Default, Debug)]
 #[allow(dead_code)]
 pub struct Stats {
-    /// Sorted population excluding NaN(!finite).
-    sorted_population: Vec<f64>, // 母集団
+    /// Sorted samples excluding NaN(!finite).
+    sorted_samples: Vec<f64>, // 母集団
 
     /// Count of !finite.
-    nan_count: usize,
+    pub nan_count: usize,
 
     // Median absolute deviation.
-    mad: f64, // 平均絶対偏差
+    pub mad: f64, // 平均絶対偏差
     /// Count of outlier.
-    outlier_count: usize, // 外れ値
+    pub outlier_count: usize, // 外れ値
     /// Lower control limit for Hampel Identifier.
-    lcl: f64, // 下限管理限界
+    pub lcl: f64, // 下限管理限界
     /// Upper control limit for Hampel Identifier.
-    ucl: f64, // 上限管理限界
+    pub ucl: f64, // 上限管理限界
 
-    /// Mean of all population. (μ)
-    mean: f64, // 平均値
-    /// Mean of the population excluding outlier.
-    mean_excluding_outlier: f64,
+    /// Mean of all samples. (μ)
+    pub mean: f64, // 平均値
+    /// Mean of the samples excluding outlier.
+    pub mean_excluding_outlier: f64,
 
-    /// Standard deviation of all population. (σ)
-    stdev: f64, // 標準偏差
-    /// Standard deviation of the population excluding outlier.
-    stdev_excluding_outlier: f64,
+    /// Standard deviation of all samples. (σ)
+    pub stdev: f64, // 標準偏差
+    /// Standard deviation of the samples excluding outlier.
+    pub stdev_excluding_outlier: f64,
 }
 
 #[allow(dead_code)]
 impl Stats {
     /// Statistical calculation and construction.
-    fn new(population: Vec<f64>) -> Self {
-        let sorted = sort_only_finite(&population);
-        let nan_count = population.len() - sorted.len();
+    pub fn new(samples: &Vec<f64>) -> Self {
+        let sorted = sort_only_finite(samples);
+        let nan_count = samples.len() - sorted.len();
         let mut instance = Self {
-            sorted_population: sorted,
-            nan_count: nan_count,
+            sorted_samples: sorted,
+            nan_count,
             ..Default::default()
         };
         instance.calc();
         instance
     }
 
-    /// Recalculate from self.sorted_population.
+    /// Recalculate from self.sorted_samples.
     fn calc(&mut self) {
         // Add, but not remove. So, the values remain unchanged.
-        if self.sorted_population.is_empty() {
+        if self.sorted_samples.is_empty() {
             return;
         };
 
-        let sorted = &self.sorted_population;
+        let sorted = &self.sorted_samples;
         let count = sorted.len();
 
         let median = sorted[count / 2];
@@ -126,51 +126,74 @@ impl Stats {
     }
 
     /// Add to sample value
-    fn add(&mut self, val: f64) {
+    pub fn add(&mut self, val: f64) {
         if !val.is_finite() {
             self.nan_count += 1;
             return;
         }
 
-        let index = bisect_right(
-            &self.sorted_population,
-            val,
-            0,
-            self.sorted_population.len(),
-        );
-        self.sorted_population.insert(index, val);
+        let index = bisect_right(&self.sorted_samples, val, 0, self.sorted_samples.len());
+        self.sorted_samples.insert(index, val);
         self.calc();
     }
 
     /// The number of samples is len().
-    fn count(&self) -> usize {
-        self.sorted_population.len()
+    pub fn count(&self) -> usize {
+        self.sorted_samples.len()
+    }
+
+    pub fn valid_count(&self) -> usize {
+        self.sorted_samples.len() - self.outlier_count
     }
 
     /// The middle of samples
-    fn median(&self) -> f64 {
-        self.sorted_population[self.sorted_population.len() / 2]
+    pub fn median(&self) -> f64 {
+        self.sorted_samples[self.sorted_samples.len() / 2]
     }
     /// The minimum of samples
-    fn min(&self) -> f64 {
-        *self.sorted_population.first().unwrap()
+    pub fn min(&self) -> f64 {
+        *self.sorted_samples.first().unwrap()
     }
     /// The maximum of samples is last().
-    fn max(&self) -> f64 {
-        *self.sorted_population.last().unwrap()
+    pub fn max(&self) -> f64 {
+        *self.sorted_samples.last().unwrap()
+    }
+
+    pub fn min_excluding_outlier(&self) -> f64 {
+        *self
+            .sorted_samples
+            .iter()
+            .find(|x| self.lcl <= **x)
+            .unwrap()
+    }
+    pub fn max_excluding_outlier(&self) -> f64 {
+        *self
+            .sorted_samples
+            .iter()
+            .filter(|x| **x <= self.ucl)
+            .nth_back(0)
+            .unwrap()
+    }
+    pub fn median_excluding_outlier(&self) -> f64 {
+        let mut excluding_outlier = self
+            .sorted_samples
+            .iter()
+            .filter(|x| self.lcl <= **x && **x <= self.ucl);
+        let count = excluding_outlier.clone().count();
+        *excluding_outlier.nth(count / 2).unwrap()
     }
 
     /// Has outlier?
-    fn has_outlier(&self) -> bool {
+    pub fn has_outlier(&self) -> bool {
         0 < self.outlier_count
     }
 
     /// The coefficient of variation is divided by mean.
-    fn calc_cv(&self) -> f64 {
+    pub fn calc_cv(&self) -> f64 {
         self.stdev / self.mean
     }
     /// The coefficient of variation excluding outlier is divided by mean_excluding_outlier.
-    fn calc_cv_excluding_outlier(&self) -> f64 {
+    pub fn calc_cv_excluding_outlier(&self) -> f64 {
         self.stdev_excluding_outlier / self.mean_excluding_outlier
     }
 }
@@ -201,7 +224,7 @@ fn bisect_right(sorted: &[f64], x: f64, lo: usize, hi: usize) -> usize {
             bisect_right(sorted, x, mid + 1, hi)
         } else {
             let mut index = mid + 1;
-            while x == sorted[index] {
+            while index < sorted.len() && x == sorted[index] {
                 index += 1;
             }
             index
@@ -225,9 +248,9 @@ mod test {
 
     #[test]
     fn stats_calculate_normal() {
-        let population = vec![3.0, 2.9, 3.1, 2.95, 3.05];
-        let stats = Stats::new(population);
-        assert_eq!(stats.sorted_population, vec![2.9, 2.95, 3.0, 3.05, 3.1]);
+        let samples = vec![3.0, 2.9, 3.1, 2.95, 3.05];
+        let stats = Stats::new(&samples);
+        assert_eq!(stats.sorted_samples, vec![2.9, 2.95, 3.0, 3.05, 3.1]);
         assert_eq!(stats.nan_count, 0);
         assert_ulps_eq!(stats.mad, 0.06);
         assert_eq!(stats.outlier_count, 0);
@@ -246,10 +269,10 @@ mod test {
 
     #[test]
     fn stats_calculate_outlier() {
-        let population = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
-        let stats = Stats::new(population);
+        let samples = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
+        let stats = Stats::new(&samples);
         assert_eq!(
-            stats.sorted_population,
+            stats.sorted_samples,
             vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
         assert_eq!(stats.nan_count, 0);
@@ -270,10 +293,10 @@ mod test {
 
     #[test]
     fn stats_add() {
-        let population = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
-        let mut stats = Stats::new(population);
+        let samples = vec![0.0, 3.0, 2.9, 3.1, 2.95, 3.05, 10.0];
+        let mut stats = Stats::new(&samples);
         assert_eq!(
-            stats.sorted_population,
+            stats.sorted_samples,
             vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
         assert_eq!(stats.nan_count, 0);
@@ -293,14 +316,14 @@ mod test {
 
         stats.add(f64::INFINITY);
         assert_eq!(
-            stats.sorted_population,
+            stats.sorted_samples,
             vec![0.0, 2.9, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
         assert_eq!(stats.nan_count, 1);
 
         stats.add(2.95);
         assert_eq!(
-            stats.sorted_population,
+            stats.sorted_samples,
             vec![0.0, 2.9, 2.95, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
         assert_eq!(stats.nan_count, 1);
@@ -320,7 +343,7 @@ mod test {
 
         stats.add(f64::NAN);
         assert_eq!(
-            stats.sorted_population,
+            stats.sorted_samples,
             vec![0.0, 2.9, 2.95, 2.95, 3.0, 3.05, 3.1, 10.0]
         );
         assert_eq!(stats.nan_count, 2);

@@ -1,5 +1,7 @@
 use anyhow::Context;
+use num_format::ToFormattedString;
 use std::io::Read;
+use strum::{EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -7,13 +9,6 @@ pub enum ReadyStatus {
     Checking,
     Ready,
     Error,
-}
-
-pub enum MeasUnit {
-    Second,
-    Percent,
-    Byte,
-    None,
 }
 
 ///  Measurement Items
@@ -25,9 +20,9 @@ pub enum MeasUnit {
 /// [time]:https://www.freebsd.org/cgi/man.cgi?query=time
 /// [gtime]:https://man7.org/linux/man-pages/man1/time.1.html
 /// [getrusage]:https://man7.org/linux/man-pages/man2/getrusage.2.html
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, EnumIter)]
 pub enum MeasItem {
-    IGNORE,
+    ExitStatus,
     Real,
     User,
     Sys,
@@ -57,7 +52,7 @@ pub enum MeasItem {
 
 pub fn meas_item_name(item: &MeasItem) -> &str {
     match item {
-        MeasItem::IGNORE => "",
+        MeasItem::ExitStatus => "Exit status",
         MeasItem::Real => "Elapsed (wall clock) time",
         MeasItem::User => "User time",
         MeasItem::Sys => "System time",
@@ -68,8 +63,8 @@ pub fn meas_item_name(item: &MeasItem) -> &str {
         MeasItem::AvgTotal => "Average total size",
         MeasItem::MaxResident => "Maximum resident set size",
         MeasItem::AvgResident => "Average resident set size",
-        MeasItem::MajorPageFault => "Major (requiring I/O) page faults",
-        MeasItem::MinorPageFault => "Minor (reclaiming a frame) page faults",
+        MeasItem::MajorPageFault => "Requiring I/O page faults",
+        MeasItem::MinorPageFault => "Reclaiming a frame page faults",
         MeasItem::VoluntaryCtxSwitch => "Voluntary context switches",
         MeasItem::InvoluntaryCtxSwitch => "Involuntary context switches",
         MeasItem::Swap => "Swaps",
@@ -86,18 +81,66 @@ pub fn meas_item_name(item: &MeasItem) -> &str {
     }
 }
 
-pub fn meas_item_unit(item: &MeasItem) -> MeasUnit {
+pub fn meas_item_name_max_width() -> usize {
+    static WIDTH: once_cell::sync::OnceCell<usize> = once_cell::sync::OnceCell::new();
+    *WIDTH.get_or_init(|| {
+        let mut width = 0;
+        for item in MeasItem::iter() {
+            width = std::cmp::max(width, meas_item_name(&item).len());
+        }
+        width
+    })
+}
+
+pub fn meas_item_unit_value(item: &MeasItem, val: f64) -> String {
     match item {
-        MeasItem::Real | MeasItem::User | MeasItem::Sys => MeasUnit::Second,
-        MeasItem::CpuUsage => MeasUnit::Percent,
+        MeasItem::Real | MeasItem::User | MeasItem::Sys => {
+            if val < 1.0 {
+                format!("{} ms", round_precision(val * 1000.0, 3))
+            } else if val < 60.0 {
+                format!("{} sec", round_precision(val, 3))
+            } else if val < 60.0 * 60.0 {
+                let min = (val / 60.0).floor();
+                format!("{:02}:{} sec", min, round_precision(val % 60.0, 3))
+            } else {
+                let hour = (val / 60.0 / 60.0).floor();
+                let min = ((val - hour * 60.0 * 60.0) / 60.0).floor();
+                format!(
+                    "{:02}:{:02}:{} sec",
+                    hour,
+                    min,
+                    round_precision(val % 60.0, 3)
+                )
+            }
+        }
+        MeasItem::CpuUsage => {
+            format!("{} %", val)
+        }
         MeasItem::MaxResident
         | MeasItem::AvgSharedText
         | MeasItem::AvgUnsharedData
         | MeasItem::AvgStack
         | MeasItem::AvgTotal
         | MeasItem::AvgResident
-        | MeasItem::PeakMemory => MeasUnit::Byte,
-        MeasItem::MajorPageFault
+        | MeasItem::PeakMemory => {
+            const KB: f64 = 1024.0;
+            const MB: f64 = 1024.0 * KB;
+            const GB: f64 = 1024.0 * MB;
+            const TB: f64 = 1024.0 * GB;
+            if val < KB {
+                format!("{} byte", round_precision(val, 3))
+            } else if val < MB {
+                format!("{} KiB", round_precision(val / KB, 3))
+            } else if val < GB {
+                format!("{} MiB", round_precision(val / MB, 3))
+            } else if val < TB {
+                format!("{} GiB", round_precision(val / GB, 3))
+            } else {
+                format!("{} TiB", round_precision(val / TB, 3))
+            }
+        }
+        MeasItem::ExitStatus
+        | MeasItem::MajorPageFault
         | MeasItem::MinorPageFault
         | MeasItem::VoluntaryCtxSwitch
         | MeasItem::InvoluntaryCtxSwitch
@@ -110,8 +153,15 @@ pub fn meas_item_unit(item: &MeasItem) -> MeasUnit {
         | MeasItem::Instruction
         | MeasItem::Cycle
         | MeasItem::Page
-        | MeasItem::Unknown(_)
-        | MeasItem::IGNORE => MeasUnit::None,
+        | MeasItem::Unknown(_) => {
+            let int = val.floor() as i64;
+            let dec = format!("{}", round_precision(val - int as f64, 3));
+            if dec == "0" {
+                int.to_formatted_string(&num_format::Locale::en)
+            } else {
+                int.to_formatted_string(&num_format::Locale::en) + &dec[1..]
+            }
+        }
     }
 }
 
@@ -125,30 +175,31 @@ enum CmdError {
     ParseError(&'static str),
 }
 
-#[derive(Debug)]
-pub struct TimeCmd<'a> {
+pub struct TimeCmd {
     sh: String,
     sh_arg: String,
     command: String,
-    re: &'a regex::Regex,
-    meas_item_map: std::collections::HashMap<&'a str, MeasItem>,
     process: std::process::Child,
     ready_status: ReadyStatus,
+    parse_meas_items: fn(&str) -> std::collections::HashMap<crate::cmd::MeasItem, f64>,
     meas_report: Option<std::collections::HashMap<MeasItem, f64>>,
 }
 
-pub fn try_new_builtin_time<'a>() -> anyhow::Result<TimeCmd<'a>> {
-    TimeCmd::try_new_with_command(
-        "bash",
-        "-c",
-        "time",
-        builtin_re(),
-        std::collections::HashMap::from([
-            ("real", MeasItem::Real),
-            ("user", MeasItem::User),
-            ("sys", MeasItem::Sys),
-        ]),
-    )
+pub fn try_new_builtin_time() -> anyhow::Result<TimeCmd> {
+    TimeCmd::try_new_with_command("bash", "-c", "time", |err_msg| {
+        let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+        let re = builtin_re();
+        for cap in re.captures_iter(err_msg) {
+            let (name, v) = capture_name_and_val(&cap);
+            match name {
+                "real" => meas_items.insert(MeasItem::Real, v),
+                "user" => meas_items.insert(MeasItem::User, v),
+                "sys" => meas_items.insert(MeasItem::Sys, v),
+                _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
+            };
+        }
+        meas_items
+    })
 }
 
 fn builtin_re() -> &'static regex::Regex {
@@ -158,38 +209,40 @@ fn builtin_re() -> &'static regex::Regex {
     })
 }
 
-pub fn try_new_bsd_time<'a>() -> anyhow::Result<TimeCmd<'a>> {
-    TimeCmd::try_new_with_command(
-        "sh",
-        "-c",
-        "/usr/bin/env time -l",
-        bsd_re(),
-        std::collections::HashMap::from([
-            ("real", MeasItem::Real),
-            ("user", MeasItem::User),
-            ("sys", MeasItem::Sys),
-            ("maximum resident set size", MeasItem::MaxResident),
-            ("average shared memory size", MeasItem::AvgSharedText),
-            ("average unshared data size", MeasItem::AvgUnsharedData),
-            ("average unshared stack size", MeasItem::AvgStack),
-            ("page reclaims", MeasItem::MajorPageFault),
-            ("page faults", MeasItem::MinorPageFault),
-            ("swaps", MeasItem::Swap),
-            ("block input operations", MeasItem::BlockInput),
-            ("block output operations", MeasItem::BlockOutput),
-            ("messages sent", MeasItem::MsgSend),
-            ("messages received", MeasItem::MsgRecv),
-            ("signals received", MeasItem::SignalRecv),
-            ("voluntary context switches", MeasItem::VoluntaryCtxSwitch),
-            (
-                "involuntary context switches",
-                MeasItem::InvoluntaryCtxSwitch,
-            ),
-            ("instructions retired", MeasItem::Instruction),
-            ("cycles elapsed", MeasItem::Cycle),
-            ("peak memory footprint", MeasItem::PeakMemory),
-        ]),
-    )
+pub fn try_new_bsd_time() -> anyhow::Result<TimeCmd> {
+    TimeCmd::try_new_with_command("sh", "-c", "/usr/bin/env time -l", |err_msg| {
+        let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+        let re = bsd_re();
+        for cap in re.captures_iter(err_msg) {
+            let (name, v) = capture_name_and_val(&cap);
+            match name {
+                "real" => meas_items.insert(MeasItem::Real, v),
+                "user" => meas_items.insert(MeasItem::User, v),
+                "sys" => meas_items.insert(MeasItem::Sys, v),
+                "maximum resident set size" => meas_items.insert(MeasItem::MaxResident, v),
+                "average shared memory size" => meas_items.insert(MeasItem::AvgSharedText, v),
+                "average unshared data size" => meas_items.insert(MeasItem::AvgUnsharedData, v),
+                "average unshared stack size" => meas_items.insert(MeasItem::AvgStack, v),
+                "page reclaims" => meas_items.insert(MeasItem::MinorPageFault, v),
+                "page faults" => meas_items.insert(MeasItem::MajorPageFault, v),
+                "swaps" => meas_items.insert(MeasItem::Swap, v),
+                "block input operations" => meas_items.insert(MeasItem::BlockInput, v),
+                "block output operations" => meas_items.insert(MeasItem::BlockOutput, v),
+                "messages sent" => meas_items.insert(MeasItem::MsgSend, v),
+                "messages received" => meas_items.insert(MeasItem::MsgRecv, v),
+                "signals received" => meas_items.insert(MeasItem::SignalRecv, v),
+                "voluntary context switches" => meas_items.insert(MeasItem::VoluntaryCtxSwitch, v),
+                "involuntary context switches" => {
+                    meas_items.insert(MeasItem::InvoluntaryCtxSwitch, v)
+                }
+                "instructions retired" => meas_items.insert(MeasItem::Instruction, v),
+                "cycles elapsed" => meas_items.insert(MeasItem::Cycle, v),
+                "peak memory footprint" => meas_items.insert(MeasItem::PeakMemory, v),
+                _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
+            };
+        }
+        meas_items
+    })
 }
 
 fn bsd_re() -> &'static regex::Regex {
@@ -200,7 +253,7 @@ fn bsd_re() -> &'static regex::Regex {
     })
 }
 
-pub fn try_new_gnu_time<'a>(alias: bool) -> anyhow::Result<TimeCmd<'a>> {
+pub fn try_new_gnu_time(alias: bool) -> anyhow::Result<TimeCmd> {
     TimeCmd::try_new_with_command(
         "sh",
         "-c",
@@ -209,70 +262,109 @@ pub fn try_new_gnu_time<'a>(alias: bool) -> anyhow::Result<TimeCmd<'a>> {
         } else {
             "/usr/bin/env time -v"
         },
-        gnu_re(),
-        std::collections::HashMap::from([
-            ("Command being timed", MeasItem::IGNORE),
-            ("User time (seconds)", MeasItem::User),
-            ("System time (seconds)", MeasItem::Sys),
-            ("Percent of CPU this job got", MeasItem::CpuUsage),
-            (
-                "Elapsed (wall clock) time (h:mm:ss or m:ss)",
-                MeasItem::Real,
-            ),
-            ("Average shared text size (kbytes)", MeasItem::AvgSharedText),
-            (
-                "Average unshared data size (kbytes)",
-                MeasItem::AvgUnsharedData,
-            ),
-            ("Average stack size (kbytes)", MeasItem::AvgStack),
-            ("Average total size (kbytes)", MeasItem::AvgTotal),
-            ("Maximum resident set size (kbytes)", MeasItem::MaxResident),
-            ("Average resident set size (kbytes)", MeasItem::AvgResident),
-            (
-                "Major (requiring I/O) page faults",
-                MeasItem::MajorPageFault,
-            ),
-            (
-                "Minor (reclaiming a frame) page faults",
-                MeasItem::MinorPageFault,
-            ),
-            ("Voluntary context switches", MeasItem::VoluntaryCtxSwitch),
-            (
-                "Involuntary context switches",
-                MeasItem::InvoluntaryCtxSwitch,
-            ),
-            ("Swaps", MeasItem::Swap),
-            ("File system inputs", MeasItem::BlockInput),
-            ("File system outputs", MeasItem::BlockOutput),
-            ("Socket messages sent", MeasItem::MsgSend),
-            ("Socket messages received", MeasItem::MsgRecv),
-            ("Signals delivered", MeasItem::SignalRecv),
-            ("Page size (bytes)", MeasItem::Page),
-            ("Exit status", MeasItem::IGNORE),
-        ]),
+        |err_msg| {
+            let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+            let re = gnu_re();
+            const KB: f64 = 1024.0;
+            for cap in re.captures_iter(err_msg) {
+                let (name, v) = capture_name_and_val(&cap);
+                match name {
+                    "Command being timed" => {}
+                    "User time (seconds)" => {
+                        meas_items.insert(MeasItem::User, v);
+                    }
+                    "System time (seconds)" => {
+                        meas_items.insert(MeasItem::Sys, v);
+                    }
+                    "Percent of CPU this job got" => {
+                        meas_items.insert(MeasItem::CpuUsage, v);
+                    }
+                    "Elapsed (wall clock) time (h:mm:ss or m:ss)" => {
+                        meas_items.insert(MeasItem::Real, v);
+                    }
+                    "Average shared text size (kbytes)" => {
+                        meas_items.insert(MeasItem::AvgSharedText, v * KB);
+                    }
+                    "Average unshared data size (kbytes)" => {
+                        meas_items.insert(MeasItem::AvgUnsharedData, v * KB);
+                    }
+                    "Average stack size (kbytes)" => {
+                        meas_items.insert(MeasItem::AvgStack, v * KB);
+                    }
+                    "Average total size (kbytes)" => {
+                        meas_items.insert(MeasItem::AvgTotal, v * KB);
+                    }
+                    "Maximum resident set size (kbytes)" => {
+                        meas_items.insert(MeasItem::MaxResident, v * KB);
+                    }
+                    "Average resident set size (kbytes)" => {
+                        meas_items.insert(MeasItem::AvgResident, v * KB);
+                    }
+                    "Major (requiring I/O) page faults" => {
+                        meas_items.insert(MeasItem::MajorPageFault, v);
+                    }
+                    "Minor (reclaiming a frame) page faults" => {
+                        meas_items.insert(MeasItem::MinorPageFault, v);
+                    }
+                    "Voluntary context switches" => {
+                        meas_items.insert(MeasItem::VoluntaryCtxSwitch, v);
+                    }
+                    "Involuntary context switches" => {
+                        meas_items.insert(MeasItem::InvoluntaryCtxSwitch, v);
+                    }
+                    "Swaps" => {
+                        meas_items.insert(MeasItem::Swap, v);
+                    }
+                    "File system inputs" => {
+                        meas_items.insert(MeasItem::BlockInput, v);
+                    }
+                    "File system outputs" => {
+                        meas_items.insert(MeasItem::BlockOutput, v);
+                    }
+                    "Socket messages sent" => {
+                        meas_items.insert(MeasItem::MsgSend, v);
+                    }
+                    "Socket messages received" => {
+                        meas_items.insert(MeasItem::MsgRecv, v);
+                    }
+                    "Signals delivered" => {
+                        meas_items.insert(MeasItem::SignalRecv, v);
+                    }
+                    "Page size (bytes)" => {
+                        meas_items.insert(MeasItem::Page, v);
+                    }
+                    "Exit status" => {
+                        meas_items.insert(MeasItem::ExitStatus, v);
+                    }
+                    _ => {
+                        meas_items.insert(MeasItem::Unknown(String::from(name)), v);
+                    }
+                };
+            }
+            meas_items
+        },
     )
 }
 
 fn gnu_re() -> &'static regex::Regex {
     static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap()
+        regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap()   
     })
 }
-impl<'a> TimeCmd<'a> {
+
+impl TimeCmd {
     pub fn try_new_with_command(
         sh: &str,
         sh_arg: &str,
         command: &str,
-        re: &'a regex::Regex,
-        meas_item_map: std::collections::HashMap<&'a str, MeasItem>,
+        parse_meas_items: fn(&str) -> std::collections::HashMap<crate::cmd::MeasItem, f64>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             sh: String::from(sh),
             sh_arg: String::from(sh_arg),
             command: String::from(command),
-            re: re,
-            meas_item_map: meas_item_map,
+            parse_meas_items,
             // test to use
             process: execute(sh, &[sh_arg, format!("{} true", command).as_str()])?,
             ready_status: ReadyStatus::Checking,
@@ -281,14 +373,12 @@ impl<'a> TimeCmd<'a> {
     }
 
     pub fn ready_status(&mut self) -> ReadyStatus {
-        if self.ready_status == ReadyStatus::Checking {
-            if self.is_finished() {
-                let err_msg = stderr(&mut self.process);
-                if self.re.is_match(err_msg.as_str()) {
-                    self.ready_status = ReadyStatus::Ready;
-                } else {
-                    self.ready_status = ReadyStatus::Error;
-                }
+        if self.ready_status == ReadyStatus::Checking && self.is_finished() {
+            let err_msg = stderr(&mut self.process);
+            if (self.parse_meas_items)(err_msg.as_str()).is_empty() {
+                self.ready_status = ReadyStatus::Error;
+            } else {
+                self.ready_status = ReadyStatus::Ready;
             }
         }
         self.ready_status
@@ -319,22 +409,17 @@ impl<'a> TimeCmd<'a> {
             return Ok(self.meas_report.as_ref().unwrap());
         }
 
-        let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
         let err_msg = stderr(&mut self.process);
-        for cap in self.re.captures_iter(err_msg.as_str()) {
-            let (name, v) = capture_name_and_val(&cap);
-            if let Some(item) = self.meas_item_map.get(name) {
-                if item != &MeasItem::IGNORE {
-                    meas_items.insert(item.clone(), v);
-                }
-            } else {
-                meas_items.insert(MeasItem::Unknown(String::from(name)), v);
-            }
-        }
-
+        let mut meas_items = (self.parse_meas_items)(err_msg.as_str());
         if meas_items.is_empty() {
             Err(CmdError::ParseError("time").into())
         } else {
+            if meas_items.get(&MeasItem::ExitStatus).is_none() {
+                meas_items.insert(
+                    MeasItem::ExitStatus,
+                    self.process.wait().unwrap().code().unwrap_or_default() as f64,
+                );
+            }
             self.meas_report = Some(meas_items);
             Ok(self.meas_report.as_ref().unwrap())
         }
@@ -362,7 +447,12 @@ fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> 
 
 fn stderr(child: &mut std::process::Child) -> String {
     let mut msg = String::new();
-    child.stderr.as_mut().unwrap().read_to_string(&mut msg);
+    child
+        .stderr
+        .as_mut()
+        .unwrap()
+        .read_to_string(&mut msg)
+        .unwrap();
     msg
 }
 
@@ -391,25 +481,26 @@ fn capture_name_and_val<'a>(cap: &'a regex::Captures) -> (&'a str, f64) {
     (name, v)
 }
 
+fn round_precision(val: f64, precision: i32) -> f64 {
+    let rank = 10f64.powi(precision);
+    (val * rank).round() / rank
+}
+
 #[cfg(test)]
 mod test {
-    use unindent::unindent;
-
     use super::*;
 
     #[test]
     fn builtin_re_match() {
-        let output = unindent(
-            "
+        let output = r#"
             real	0m1.007s
             user	100m0.000s
             sys	0m0.001s
-        ",
-        );
+        "#;
         let expected =
             std::collections::HashMap::from([("real", 1.007), ("user", 6000.0), ("sys", 0.001)]);
         let mut actually = std::collections::HashMap::<String, f64>::new();
-        for cap in builtin_re().captures_iter(output.as_str()) {
+        for cap in builtin_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);
         }
@@ -425,8 +516,7 @@ mod test {
 
     #[test]
     fn bsd_re_match() {
-        let output = unindent(
-            "
+        let output = r#"
             1.00 real         0.10 user         0.01 sys
                 1277952  maximum resident set size
                     10  average shared memory size
@@ -445,8 +535,7 @@ mod test {
                 3056324  instructions retired
                 1136018  cycles elapsed
                 704896  peak memory footprint
-        ",
-        );
+        "#;
         let expected = std::collections::HashMap::from([
             ("real", 1.00),
             ("user", 0.10),
@@ -470,7 +559,7 @@ mod test {
             ("peak memory footprint", 704896.0),
         ]);
         let mut actually = std::collections::HashMap::<String, f64>::new();
-        for cap in bsd_re().captures_iter(output.as_str()) {
+        for cap in bsd_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);
         }
@@ -486,8 +575,7 @@ mod test {
 
     #[test]
     fn gnu_re_match() {
-        let output = unindent(
-            r#"
+        let output = r#"
             Command being timed: "sleep 1"
             User time (seconds): 0.01
             System time (seconds): 0.02
@@ -511,8 +599,7 @@ mod test {
             Signals delivered: 17
             Page size (bytes): 16384
             Exit status: 18
-        "#,
-        );
+        "#;
         let expected = std::collections::HashMap::from([
             ("User time (seconds)", 0.01),
             ("System time (seconds)", 0.02),
@@ -538,7 +625,7 @@ mod test {
             ("Exit status", 18.0),
         ]);
         let mut actually = std::collections::HashMap::<String, f64>::new();
-        for cap in gnu_re().captures_iter(output.as_str()) {
+        for cap in gnu_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);
         }
@@ -549,6 +636,88 @@ mod test {
                 .iter()
                 .filter(|kvp| expected[kvp.0.as_str()] == *kvp.1)
                 .count()
+        );
+    }
+
+    #[test]
+    fn meas_item_unit_value_sec() {
+        assert_eq!(
+            "123.457 ms",
+            meas_item_unit_value(&MeasItem::Real, 0.123456789)
+        );
+        assert_eq!(
+            "12.346 sec",
+            meas_item_unit_value(&MeasItem::Real, 12.3456789)
+        );
+        assert_eq!(
+            "01:23.457 sec",
+            meas_item_unit_value(&MeasItem::Real, 60.0 + 23.456789)
+        );
+        assert_eq!(
+            "59:23.457 sec",
+            meas_item_unit_value(&MeasItem::Real, 59.0 * 60.0 + 23.456789)
+        );
+        assert_eq!(
+            "123:04:56.789 sec",
+            meas_item_unit_value(&MeasItem::Real, 123.0 * 60.0 * 60.0 + 4.0 * 60.0 + 56.789)
+        );
+    }
+
+    #[test]
+    fn meas_item_unit_value_byte() {
+        assert_eq!(
+            "123.457 byte",
+            meas_item_unit_value(&MeasItem::MaxResident, 123.456789)
+        );
+        assert_eq!(
+            "12.346 KiB",
+            meas_item_unit_value(&MeasItem::MaxResident, 12.3456789 * 1024.0)
+        );
+        assert_eq!(
+            "123.457 MiB",
+            meas_item_unit_value(&MeasItem::MaxResident, 123.456789 * 1024.0 * 1024.0)
+        );
+        assert_eq!(
+            "123.457 GiB",
+            meas_item_unit_value(
+                &MeasItem::MaxResident,
+                123.456789 * 1024.0 * 1024.0 * 1024.0
+            )
+        );
+        assert_eq!(
+            "1234.568 TiB",
+            meas_item_unit_value(
+                &MeasItem::MaxResident,
+                1234.56789 * 1024.0 * 1024.0 * 1024.0 * 1024.0
+            )
+        );
+    }
+
+    #[test]
+    fn meas_item_unit_value_digit() {
+        assert_eq!(
+            "123.457",
+            meas_item_unit_value(&MeasItem::Cycle, 123.456789)
+        );
+        assert_eq!(
+            "123,456.789",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456.789)
+        );
+        assert_eq!(
+            "123,456,789",
+            meas_item_unit_value(&MeasItem::Cycle, 123456789.0)
+        );
+        assert_eq!(
+            "123,456,789,012.346",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012.3456789)
+        );
+        assert_eq!(
+            "123,456,789,012,345",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.0)
+        );
+        assert_eq!(
+            "123,456,789,012,345.672",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.6789)
         );
     }
 }

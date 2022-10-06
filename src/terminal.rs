@@ -1,3 +1,7 @@
+use std::io::Write;
+
+use crossterm::QueueableCommand;
+
 pub struct Wrapper<B>
 where
     B: tui::backend::Backend,
@@ -44,5 +48,25 @@ where
         if self.is_out_tty {
             self.terminal_mut().draw(f).unwrap();
         }
+    }
+
+    pub fn queue_attribute(&self, attr: crossterm::style::SetAttribute) {
+        if self.is_out_tty {
+            std::io::stdout().queue(attr);
+        }
+    }
+    pub fn queue_print<T>(&self, print: crossterm::style::Print<T>)
+    where
+        T: std::fmt::Display,
+    {
+        std::io::stdout().queue(print);
+    }
+    pub fn flush(&self, reset: bool) {
+        if reset {
+            std::io::stdout().queue(crossterm::style::SetAttribute(
+                crossterm::style::Attribute::Reset,
+            ));
+        }
+        std::io::stdout().flush();
     }
 }

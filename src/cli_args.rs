@@ -9,7 +9,7 @@ use clap::Parser;
 pub struct CliArgs {
     /// Perform exactly NUM runs for each command.
     #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 5)]
-    runs: u16,
+    pub runs: u16,
 
     /// The commands to benchmark.
     ///
