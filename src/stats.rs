@@ -190,11 +190,23 @@ impl Stats {
 
     /// The coefficient of variation is divided by mean.
     pub fn calc_cv(&self) -> f64 {
-        self.stdev / self.mean
+        if 0.0 < self.mean {
+            self.stdev / self.mean
+        } else if 0.0 < self.stdev {
+            100.0
+        } else {
+            0.0
+        }
     }
     /// The coefficient of variation excluding outlier is divided by mean_excluding_outlier.
     pub fn calc_cv_excluding_outlier(&self) -> f64 {
-        self.stdev_excluding_outlier / self.mean_excluding_outlier
+        if 0.0 < self.mean_excluding_outlier {
+            self.stdev_excluding_outlier / self.mean_excluding_outlier
+        } else if 0.0 < self.stdev_excluding_outlier {
+            100.0
+        } else {
+            0.0
+        }
     }
 }
 

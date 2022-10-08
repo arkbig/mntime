@@ -41,6 +41,12 @@ where
         }
     }
 
+    pub fn set_cursor(&mut self, x: u16, y: u16) {
+        if self.is_out_tty {
+            self.terminal.set_cursor(x, y).unwrap();
+        }
+    }
+
     pub fn draw_if_tty<F>(&mut self, f: F)
     where
         F: FnOnce(&mut tui::Frame<B>),
@@ -50,23 +56,47 @@ where
         }
     }
 
-    pub fn queue_attribute(&self, attr: crossterm::style::SetAttribute) {
+    pub fn clear_after(&mut self) {
+        self.flush(true);
+        let cur_y = self.get_cursor().1;
+        self.draw_if_tty(|f| {
+            let size = f.size();
+            if cur_y < size.height {
+                let rect = tui::layout::Rect::new(0, cur_y, size.width, size.height - cur_y);
+                f.render_widget(tui::widgets::Clear, rect);
+            }
+        });
+        self.set_cursor(0, cur_y);
+    }
+
+    pub fn queue_attribute(&self, attr: crossterm::style::Attribute) {
         if self.is_out_tty {
-            std::io::stdout().queue(attr);
+            std::io::stdout()
+                .queue(crossterm::style::SetAttribute(attr))
+                .unwrap();
+        }
+    }
+    pub fn queue_fg(&self, color: crossterm::style::Color) {
+        if self.is_out_tty {
+            std::io::stdout()
+                .queue(crossterm::style::SetForegroundColor(color))
+                .unwrap();
         }
     }
     pub fn queue_print<T>(&self, print: crossterm::style::Print<T>)
     where
         T: std::fmt::Display,
     {
-        std::io::stdout().queue(print);
+        std::io::stdout().queue(print).unwrap();
     }
     pub fn flush(&self, reset: bool) {
-        if reset {
-            std::io::stdout().queue(crossterm::style::SetAttribute(
-                crossterm::style::Attribute::Reset,
-            ));
+        if reset && self.is_out_tty {
+            std::io::stdout()
+                .queue(crossterm::style::SetAttribute(
+                    crossterm::style::Attribute::Reset,
+                ))
+                .unwrap();
         }
-        std::io::stdout().flush();
+        std::io::stdout().flush().unwrap();
     }
 }

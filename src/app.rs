@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, cell::RefCell, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, rc::Rc};
 use strum::IntoEnumIterator;
 
 /// The application is started and terminated.
@@ -133,7 +133,7 @@ enum UpdateMsg {
 struct SharedViewModel {
     current_run: u16,
     current_max: u16,
-    current_reports: Vec<std::collections::HashMap<crate::cmd::MeasItem, f64>>,
+    current_reports: Box<Vec<HashMap<crate::cmd::MeasItem, f64>>>,
 }
 
 /// Updating thread job
@@ -162,13 +162,17 @@ fn run_app(
 
     // Benchmarking
     let mut last_tick = std::time::Instant::now();
-    for target in cli_args.normalized_commands() {
+    for (target_index, target) in cli_args.normalized_commands().iter().enumerate() {
         draw_tx
-            .send(DrawMsg::PrintH(format!("Benchmark: {}", target)))
+            .send(DrawMsg::PrintH(format!(
+                "Benchmark #{}: {}",
+                target_index + 1,
+                target
+            )))
             .unwrap();
         {
             let mut m = model.write().unwrap();
-            m.current_reports = Vec::new();
+            m.current_reports = Box::new(Vec::new());
             m.current_max = cli_args.runs;
         }
         for n in 0..cli_args.runs {
@@ -200,8 +204,13 @@ fn run_app(
                 last_tick = std::time::Instant::now();
             }
         }
-        model.write().unwrap().current_max = 0;
-        draw_tx.send(DrawMsg::FinalizeReport).unwrap();
+        {
+            let mut m = model.write().unwrap();
+            m.current_max = 0;
+            draw_tx
+                .send(DrawMsg::FinalizeReport(m.current_reports.clone()))
+                .unwrap();
+        }
     }
     (proc_exit::Code::SUCCESS, None)
 }
@@ -302,7 +311,7 @@ fn command_available(
 enum DrawMsg {
     Quit,
     PrintH(String),
-    FinalizeReport,
+    FinalizeReport(Box<Vec<HashMap<crate::cmd::MeasItem, f64>>>),
 }
 
 #[derive(Default, Debug)]
@@ -331,14 +340,13 @@ fn view_app<B>(
                 return;
             }
             Ok(DrawMsg::PrintH(text)) => {
-                terminal.queue_attribute(crossterm::style::SetAttribute(
-                    crossterm::style::Attribute::Bold,
-                ));
-                terminal.queue_print(crossterm::style::Print(text));
+                terminal.queue_attribute(crossterm::style::Attribute::Bold);
+                terminal.queue_fg(crossterm::style::Color::Cyan);
+                terminal.queue_print(crossterm::style::Print(text + "\r\n"));
                 terminal.flush(true);
             }
-            Ok(DrawMsg::FinalizeReport) => {
-                print_reports(terminal, &model.read().unwrap().current_reports);
+            Ok(DrawMsg::FinalizeReport(reports)) => {
+                print_reports(terminal, reports.as_ref());
             }
             _ => {}
         }
@@ -354,6 +362,7 @@ fn view_app<B>(
                 )
             });
             last_tick = std::time::Instant::now();
+            terminal.set_cursor(0, cur_y);
             draw_state.throbber.calc_next();
         }
     }
@@ -363,10 +372,10 @@ fn ui<B>(f: &mut tui::Frame<B>, model: &SharedViewModel, state: &mut DrawState, 
 where
     B: tui::backend::Backend,
 {
-    let size = f.size();
-
+    let mut _offset_y = 0;
     if 0 < model.current_max {
-        draw_progress(f, model, state, &size, cur_y);
+        _offset_y += draw_progress(f, model, state, cur_y, _offset_y);
+        _offset_y += draw_summary_report(f, model, state, cur_y, _offset_y);
     }
 }
 
@@ -374,21 +383,23 @@ fn draw_progress<B>(
     f: &mut tui::Frame<B>,
     model: &SharedViewModel,
     state: &mut DrawState,
-    size: &tui::layout::Rect,
     cur_y: &mut u16,
-) where
+    offset_y: u16,
+) -> u16
+where
     B: tui::backend::Backend,
 {
+    let size = f.size();
     let height = 1;
-    if size.height < height {
-        return;
+    if size.height < offset_y + height {
+        return 0;
     }
-    while size.height < *cur_y + height {
+    while size.height < *cur_y + offset_y + height {
         println!();
         *cur_y -= 1;
     }
 
-    let rect = tui::layout::Rect::new(0, *cur_y, size.width, height);
+    let rect = tui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
     let chunks = tui::layout::Layout::default()
         .direction(tui::layout::Direction::Horizontal)
         .constraints(
@@ -435,35 +446,109 @@ fn draw_progress<B>(
         .ratio(model.current_run as f64 / model.current_max as f64)
         .label(label);
     f.render_widget(gauge, chunks[1]);
+
+    height
+}
+
+fn draw_summary_report<B>(
+    f: &mut tui::Frame<B>,
+    model: &SharedViewModel,
+    _state: &mut DrawState,
+    cur_y: &mut u16,
+    offset_y: u16,
+) -> u16
+where
+    B: tui::backend::Backend,
+{
+    use crate::cmd::{meas_item_unit_value, MeasItem};
+
+    let size = f.size();
+    let height = 1;
+    if size.height < offset_y + height {
+        return 0;
+    }
+    while size.height < *cur_y + offset_y + height {
+        println!();
+        *cur_y -= 1;
+    }
+
+    let rect = tui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
+    let chunks = tui::layout::Layout::default()
+        .direction(tui::layout::Direction::Horizontal)
+        .constraints(
+            [
+                tui::layout::Constraint::Percentage(33),
+                tui::layout::Constraint::Percentage(33),
+                tui::layout::Constraint::Percentage(33),
+            ]
+            .as_ref(),
+        )
+        .split(rect);
+
+    let mut layout_index = 0;
+    for item in vec![MeasItem::Real, MeasItem::User, MeasItem::Sys] {
+        let samples: Vec<_> = model
+            .current_reports
+            .iter()
+            .filter_map(|x| x.get(&item))
+            .map(|x| *x)
+            .collect();
+        let stats = crate::stats::Stats::new(&samples);
+        let text = tui::widgets::Paragraph::new(tui::text::Spans::from(format!(
+            "{} {} ± {}",
+            item.as_ref(),
+            meas_item_unit_value(&item, stats.mean),
+            meas_item_unit_value(&item, stats.stdev),
+        )));
+        f.render_widget(text, chunks[layout_index]);
+        layout_index += 1;
+    }
+
+    height
 }
 
 fn print_reports<B>(
     terminal: &mut crate::terminal::Wrapper<B>,
-    reports: &Vec<std::collections::HashMap<crate::cmd::MeasItem, f64>>,
+    reports: &Vec<HashMap<crate::cmd::MeasItem, f64>>,
 ) where
     B: tui::backend::Backend,
 {
     use crate::cmd::{meas_item_name, meas_item_name_max_width, meas_item_unit_value};
-    let mut lines = vec![format!(
-        "{:^width$}: Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count",
-        "LEGEND",
-        width = meas_item_name_max_width()
-    )];
+
+    const MEAN_WIDTH: usize = 13;
+
+    terminal.clear_after();
+
+    let mut lines = Vec::new();
+    let mut exist_error = false;
     for item in crate::cmd::MeasItem::iter() {
         let samples: Vec<_> = reports
             .iter()
             .filter_map(|x| x.get(&item))
             .map(|x| *x)
             .collect();
-        if !samples.iter().any(|&x| x.to_bits() != 0) {
-            continue;
+        match item {
+            crate::cmd::MeasItem::Real | crate::cmd::MeasItem::User | crate::cmd::MeasItem::Sys => {
+                // Required.
+            }
+            _ => {
+                // Skip if can't measure.
+                if !samples.iter().any(|&x| x.to_bits() != 0) {
+                    continue;
+                }
+                if samples.len() == 0 {
+                    continue;
+                }
+            }
         }
-        if samples.len() == 0 {
+        if item == crate::cmd::MeasItem::ExitStatus {
+            exist_error = true;
+            print_exit_status(terminal, &samples);
             continue;
         }
         let stats = crate::stats::Stats::new(&samples);
         lines.push(format!(
-            "{:width$}: {} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}",
+            "{:name_width$}:{:>mean_width$} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}",
             meas_item_name(&item),
             meas_item_unit_value(&item, stats.mean),
             meas_item_unit_value(&item, stats.stdev),
@@ -472,11 +557,12 @@ fn print_reports<B>(
             meas_item_unit_value(&item, stats.median()),
             meas_item_unit_value(&item, stats.max()),
             stats.valid_count(),
-            width = meas_item_name_max_width()
+            name_width = meas_item_name_max_width(),
+            mean_width = MEAN_WIDTH,
         ));
         if stats.has_outlier() {
             lines.push(format!(
-                "{:^width$}: {} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}(+{})",
+                "{:^name_width$}:{:>mean_width$} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}(+{})",
                 "└─Excluding Outlier",
                 meas_item_unit_value(&item, stats.mean_excluding_outlier),
                 meas_item_unit_value(&item, stats.stdev_excluding_outlier),
@@ -486,8 +572,72 @@ fn print_reports<B>(
                 meas_item_unit_value(&item, stats.max_excluding_outlier()),
                 stats.count(),
                 stats.outlier_count,
-                width = meas_item_name_max_width()
+                name_width = meas_item_name_max_width(),
+                mean_width = MEAN_WIDTH,
             ));
         }
     }
+
+    if exist_error {
+        terminal.queue_fg(crossterm::style::Color::Red);
+    } else {
+        terminal.queue_fg(crossterm::style::Color::Green);
+    }
+    terminal.queue_print(crossterm::style::Print(format!(
+        "{:^name_width$}:{:>mean_width$} ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count\r\n",
+        "LEGEND",
+        "Mean",
+        name_width = meas_item_name_max_width(),
+        mean_width = MEAN_WIDTH,
+    )));
+    terminal.queue_attribute(crossterm::style::Attribute::Reset);
+
+    terminal.queue_print(crossterm::style::Print(lines.join("\r\n") + "\r\n"));
+    terminal.flush(true);
+}
+
+fn print_exit_status<B>(terminal: &mut crate::terminal::Wrapper<B>, samples: &Vec<f64>)
+where
+    B: tui::backend::Backend,
+{
+    use crate::cmd::{meas_item_name, meas_item_name_max_width};
+
+    let mut histogram = samples.iter().fold(HashMap::<i32, i16>::new(), |mut s, x| {
+        let code = x.floor() as i32;
+        if s.contains_key(&code) {
+            *s.get_mut(&code).unwrap() += 1;
+        } else {
+            s.insert(code, 1);
+        }
+        s
+    });
+    let success = *histogram.get(&0).unwrap_or(&0);
+    if histogram.get(&0).is_some() {
+        histogram.remove(&0);
+    }
+    let failure = samples.len() - success as usize;
+    let mut failure_codes = histogram.iter().collect::<Vec<_>>();
+    failure_codes.sort_by(|a, b| a.0.cmp(b.0));
+    terminal.queue_fg(crossterm::style::Color::Red);
+    terminal.queue_print(crossterm::style::Print(format!(
+        "{:>name_width$} ",
+        meas_item_name(&crate::cmd::MeasItem::ExitStatus),
+        name_width = meas_item_name_max_width()
+    )));
+    terminal.queue_fg(crossterm::style::Color::Green);
+    terminal.queue_print(crossterm::style::Print(format!(
+        "Success {} times ",
+        success
+    )));
+    terminal.queue_fg(crossterm::style::Color::Red);
+    terminal.queue_print(crossterm::style::Print(format!(
+        "Failure {} times [(code× times) {}]\r\n",
+        failure,
+        failure_codes
+            .iter()
+            .map(|x| format!("{}× {}", x.0, x.1))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )));
+    terminal.queue_attribute(crossterm::style::Attribute::Reset);
 }

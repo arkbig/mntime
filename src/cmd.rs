@@ -1,7 +1,7 @@
 use anyhow::Context;
 use num_format::ToFormattedString;
-use std::io::Read;
-use strum::{EnumIter, IntoEnumIterator};
+use std::{collections::HashMap, io::Read};
+use strum::{AsRefStr, EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -20,7 +20,7 @@ pub enum ReadyStatus {
 /// [time]:https://www.freebsd.org/cgi/man.cgi?query=time
 /// [gtime]:https://man7.org/linux/man-pages/man1/time.1.html
 /// [getrusage]:https://man7.org/linux/man-pages/man2/getrusage.2.html
-#[derive(Debug, Hash, Eq, PartialEq, Clone, EnumIter)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, EnumIter, AsRefStr)]
 pub enum MeasItem {
     ExitStatus,
     Real,
@@ -114,7 +114,7 @@ pub fn meas_item_unit_value(item: &MeasItem, val: f64) -> String {
             }
         }
         MeasItem::CpuUsage => {
-            format!("{} %", val)
+            format!("{} %", round_precision(val, 2))
         }
         MeasItem::MaxResident
         | MeasItem::AvgSharedText
@@ -181,13 +181,13 @@ pub struct TimeCmd {
     command: String,
     process: std::process::Child,
     ready_status: ReadyStatus,
-    parse_meas_items: fn(&str) -> std::collections::HashMap<crate::cmd::MeasItem, f64>,
-    meas_report: Option<std::collections::HashMap<MeasItem, f64>>,
+    parse_meas_items: fn(&str) -> HashMap<MeasItem, f64>,
+    meas_report: Option<HashMap<MeasItem, f64>>,
 }
 
 pub fn try_new_builtin_time() -> anyhow::Result<TimeCmd> {
     TimeCmd::try_new_with_command("bash", "-c", "time", |err_msg| {
-        let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+        let mut meas_items = HashMap::<MeasItem, f64>::new();
         let re = builtin_re();
         for cap in re.captures_iter(err_msg) {
             let (name, v) = capture_name_and_val(&cap);
@@ -211,7 +211,7 @@ fn builtin_re() -> &'static regex::Regex {
 
 pub fn try_new_bsd_time() -> anyhow::Result<TimeCmd> {
     TimeCmd::try_new_with_command("sh", "-c", "/usr/bin/env time -l", |err_msg| {
-        let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+        let mut meas_items = HashMap::<MeasItem, f64>::new();
         let re = bsd_re();
         for cap in re.captures_iter(err_msg) {
             let (name, v) = capture_name_and_val(&cap);
@@ -263,7 +263,7 @@ pub fn try_new_gnu_time(alias: bool) -> anyhow::Result<TimeCmd> {
             "/usr/bin/env time -v"
         },
         |err_msg| {
-            let mut meas_items = std::collections::HashMap::<MeasItem, f64>::new();
+            let mut meas_items = HashMap::<MeasItem, f64>::new();
             let re = gnu_re();
             const KB: f64 = 1024.0;
             for cap in re.captures_iter(err_msg) {
@@ -358,7 +358,7 @@ impl TimeCmd {
         sh: &str,
         sh_arg: &str,
         command: &str,
-        parse_meas_items: fn(&str) -> std::collections::HashMap<crate::cmd::MeasItem, f64>,
+        parse_meas_items: fn(&str) -> HashMap<MeasItem, f64>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             sh: String::from(sh),
@@ -392,6 +392,7 @@ impl TimeCmd {
             self.sh.as_str(),
             &[
                 self.sh_arg.as_str(),
+                //format!("{} sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 ;do {};done'", self.command, command).as_str(),
                 format!("{} {}", self.command, command).as_str(),
             ],
         )?;
@@ -402,7 +403,7 @@ impl TimeCmd {
         self.process.try_wait().unwrap().is_some()
     }
 
-    pub fn get_report(&mut self) -> anyhow::Result<&std::collections::HashMap<MeasItem, f64>> {
+    pub fn get_report(&mut self) -> anyhow::Result<&HashMap<MeasItem, f64>> {
         anyhow::ensure!(self.is_finished(), CmdError::NotFinished);
 
         if self.meas_report.is_some() {
@@ -433,7 +434,7 @@ impl TimeCmd {
 fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> {
     std::process::Command::new(program)
         .args(args)
-        .stdout(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .with_context(|| {
@@ -497,9 +498,8 @@ mod test {
             user	100m0.000s
             sys	0m0.001s
         "#;
-        let expected =
-            std::collections::HashMap::from([("real", 1.007), ("user", 6000.0), ("sys", 0.001)]);
-        let mut actually = std::collections::HashMap::<String, f64>::new();
+        let expected = HashMap::from([("real", 1.007), ("user", 6000.0), ("sys", 0.001)]);
+        let mut actually = HashMap::<String, f64>::new();
         for cap in builtin_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);
@@ -536,7 +536,7 @@ mod test {
                 1136018  cycles elapsed
                 704896  peak memory footprint
         "#;
-        let expected = std::collections::HashMap::from([
+        let expected = HashMap::from([
             ("real", 1.00),
             ("user", 0.10),
             ("sys", 0.01),
@@ -558,7 +558,7 @@ mod test {
             ("cycles elapsed", 1136018.0),
             ("peak memory footprint", 704896.0),
         ]);
-        let mut actually = std::collections::HashMap::<String, f64>::new();
+        let mut actually = HashMap::<String, f64>::new();
         for cap in bsd_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);
@@ -600,7 +600,7 @@ mod test {
             Page size (bytes): 16384
             Exit status: 18
         "#;
-        let expected = std::collections::HashMap::from([
+        let expected = HashMap::from([
             ("User time (seconds)", 0.01),
             ("System time (seconds)", 0.02),
             ("Percent of CPU this job got", 3.0),
@@ -624,7 +624,7 @@ mod test {
             ("Page size (bytes)", 16384.0),
             ("Exit status", 18.0),
         ]);
-        let mut actually = std::collections::HashMap::<String, f64>::new();
+        let mut actually = HashMap::<String, f64>::new();
         for cap in gnu_re().captures_iter(output) {
             let (name, v) = capture_name_and_val(&cap);
             actually.insert(String::from(name), v);

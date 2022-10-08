@@ -7,8 +7,8 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None, setting = clap::builder::AppSettings::TrailingVarArg | clap::builder::AppSettings::DeriveDisplayOrder)]
 pub struct CliArgs {
-    /// Perform exactly NUM runs for each command.
-    #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 5)]
+    /// Perform NUM runs for each command.
+    #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 8)]
     pub runs: u16,
 
     /// The commands to benchmark.
