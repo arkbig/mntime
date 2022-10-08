@@ -32,11 +32,18 @@ pub fn run() -> proc_exit::ExitResult {
                 update_tick_rate,
                 draw_tx_clone,
                 model.clone(),
-                cli_args,
+                &cli_args,
             )
         });
-        let drawing_thread =
-            s.spawn(|| view_app(draw_rx, draw_tick_rate, model.clone(), &mut terminal));
+        let drawing_thread = s.spawn(|| {
+            view_app(
+                draw_rx,
+                draw_tick_rate,
+                model.clone(),
+                &cli_args,
+                &mut terminal,
+            )
+        });
 
         // Input monitoring.
         while !updating_thread.is_finished() {
@@ -142,7 +149,7 @@ fn run_app(
     tick_rate: std::time::Duration,
     draw_tx: std::sync::mpsc::Sender<DrawMsg>,
     model: std::sync::Arc<std::sync::RwLock<SharedViewModel>>,
-    cli_args: crate::cli_args::CliArgs,
+    cli_args: &crate::cli_args::CliArgs,
 ) -> (proc_exit::Code, Option<String>) {
     // Checking available
     let time_commands = prepare_time_commands(&rx, tick_rate);
@@ -190,7 +197,19 @@ fn run_app(
                         break;
                     }
                 } else {
-                    if let Err(err) = (*time_cmd).borrow_mut().execute(target.as_str()) {
+                    let time_cmd_result = if cli_args.loops <= 1 {
+                        (*time_cmd).borrow_mut().execute(target.as_str())
+                    } else {
+                        (*time_cmd).borrow_mut().execute(
+                            format!(
+                                "sh -c 'for i in {} ;do {};done'",
+                                vec!["0"; cli_args.loops as usize].join(" "),
+                                target
+                            )
+                            .as_str(),
+                        )
+                    };
+                    if let Err(err) = time_cmd_result {
                         return (proc_exit::Code::FAILURE, Some(format!("{:}", err)));
                     }
                     running = true;
@@ -323,6 +342,7 @@ fn view_app<B>(
     rx: std::sync::mpsc::Receiver<DrawMsg>,
     tick_rate: std::time::Duration,
     model: std::sync::Arc<std::sync::RwLock<SharedViewModel>>,
+    cli_args: &crate::cli_args::CliArgs,
     terminal: &mut crate::terminal::Wrapper<B>,
 ) where
     B: tui::backend::Backend,
@@ -346,7 +366,7 @@ fn view_app<B>(
                 terminal.flush(true);
             }
             Ok(DrawMsg::FinalizeReport(reports)) => {
-                print_reports(terminal, reports.as_ref());
+                print_reports(terminal, reports.as_ref(), cli_args.loops);
             }
             _ => {}
         }
@@ -359,6 +379,7 @@ fn view_app<B>(
                     model.read().as_ref().unwrap(),
                     &mut draw_state,
                     &mut cur_y,
+                    cli_args.loops,
                 )
             });
             last_tick = std::time::Instant::now();
@@ -368,14 +389,19 @@ fn view_app<B>(
     }
 }
 
-fn ui<B>(f: &mut tui::Frame<B>, model: &SharedViewModel, state: &mut DrawState, cur_y: &mut u16)
-where
+fn ui<B>(
+    f: &mut tui::Frame<B>,
+    model: &SharedViewModel,
+    state: &mut DrawState,
+    cur_y: &mut u16,
+    loops: u16,
+) where
     B: tui::backend::Backend,
 {
     let mut _offset_y = 0;
     if 0 < model.current_max {
-        _offset_y += draw_progress(f, model, state, cur_y, _offset_y);
-        _offset_y += draw_summary_report(f, model, state, cur_y, _offset_y);
+        _offset_y += draw_progress(f, model, state, cur_y, _offset_y, loops);
+        _offset_y += draw_summary_report(f, model, state, cur_y, _offset_y, loops);
     }
 }
 
@@ -385,6 +411,7 @@ fn draw_progress<B>(
     state: &mut DrawState,
     cur_y: &mut u16,
     offset_y: u16,
+    loops: u16,
 ) -> u16
 where
     B: tui::backend::Backend,
@@ -431,10 +458,11 @@ where
         if 0.0 < stats.mean {
             format!(
                 "Mean {}, so about {} left",
-                crate::cmd::meas_item_unit_value(&crate::cmd::MeasItem::Real, stats.mean),
+                crate::cmd::meas_item_unit_value(&crate::cmd::MeasItem::Real, stats.mean, loops),
                 crate::cmd::meas_item_unit_value(
                     &crate::cmd::MeasItem::Real,
-                    stats.mean * ((model.current_max - model.current_run) as f64)
+                    stats.mean * ((model.current_max - model.current_run) as f64),
+                    1 // Actual time not divided by loops.
                 )
             )
         } else {
@@ -456,6 +484,7 @@ fn draw_summary_report<B>(
     _state: &mut DrawState,
     cur_y: &mut u16,
     offset_y: u16,
+    loops: u16,
 ) -> u16
 where
     B: tui::backend::Backend,
@@ -497,8 +526,8 @@ where
         let text = tui::widgets::Paragraph::new(tui::text::Spans::from(format!(
             "{} {} ± {}",
             item.as_ref(),
-            meas_item_unit_value(&item, stats.mean),
-            meas_item_unit_value(&item, stats.stdev),
+            meas_item_unit_value(&item, stats.mean, loops),
+            meas_item_unit_value(&item, stats.stdev, loops),
         )));
         f.render_widget(text, chunks[layout_index]);
         layout_index += 1;
@@ -510,6 +539,7 @@ where
 fn print_reports<B>(
     terminal: &mut crate::terminal::Wrapper<B>,
     reports: &Vec<HashMap<crate::cmd::MeasItem, f64>>,
+    loops: u16,
 ) where
     B: tui::backend::Backend,
 {
@@ -543,36 +573,36 @@ fn print_reports<B>(
         }
         if item == crate::cmd::MeasItem::ExitStatus {
             exist_error = true;
-            print_exit_status(terminal, &samples);
+            print_exit_status(terminal, &samples, loops);
             continue;
         }
         let stats = crate::stats::Stats::new(&samples);
         lines.push(format!(
             "{:name_width$}:{:>mean_width$} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}",
-            meas_item_name(&item),
-            meas_item_unit_value(&item, stats.mean),
-            meas_item_unit_value(&item, stats.stdev),
+            meas_item_name(&item, loops),
+            meas_item_unit_value(&item, stats.mean, loops),
+            meas_item_unit_value(&item, stats.stdev, loops),
             stats.calc_cv() * 100.0,
-            meas_item_unit_value(&item, stats.min()),
-            meas_item_unit_value(&item, stats.median()),
-            meas_item_unit_value(&item, stats.max()),
-            stats.valid_count(),
-            name_width = meas_item_name_max_width(),
+            meas_item_unit_value(&item, stats.min(), loops),
+            meas_item_unit_value(&item, stats.median(), loops),
+            meas_item_unit_value(&item, stats.max(), loops),
+            stats.count(),
+            name_width = meas_item_name_max_width(loops),
             mean_width = MEAN_WIDTH,
         ));
         if stats.has_outlier() {
             lines.push(format!(
-                "{:^name_width$}:{:>mean_width$} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}(+{})",
+                "{:^name_width$}:{:>mean_width$} ± {} ({:.1} %) [{} ≦ {} ≦ {}] / {}(-{})",
                 "└─Excluding Outlier",
-                meas_item_unit_value(&item, stats.mean_excluding_outlier),
-                meas_item_unit_value(&item, stats.stdev_excluding_outlier),
+                meas_item_unit_value(&item, stats.mean_excluding_outlier, loops),
+                meas_item_unit_value(&item, stats.stdev_excluding_outlier, loops),
                 stats.calc_cv_excluding_outlier() * 100.0,
-                meas_item_unit_value(&item, stats.min_excluding_outlier()),
-                meas_item_unit_value(&item, stats.median_excluding_outlier()),
-                meas_item_unit_value(&item, stats.max_excluding_outlier()),
-                stats.count(),
+                meas_item_unit_value(&item, stats.min_excluding_outlier(), loops),
+                meas_item_unit_value(&item, stats.median_excluding_outlier(), loops),
+                meas_item_unit_value(&item, stats.max_excluding_outlier(), loops),
+                stats.valid_count(),
                 stats.outlier_count,
-                name_width = meas_item_name_max_width(),
+                name_width = meas_item_name_max_width(loops),
                 mean_width = MEAN_WIDTH,
             ));
         }
@@ -587,7 +617,7 @@ fn print_reports<B>(
         "{:^name_width$}:{:>mean_width$} ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count\r\n",
         "LEGEND",
         "Mean",
-        name_width = meas_item_name_max_width(),
+        name_width = meas_item_name_max_width(loops),
         mean_width = MEAN_WIDTH,
     )));
     terminal.queue_attribute(crossterm::style::Attribute::Reset);
@@ -596,7 +626,7 @@ fn print_reports<B>(
     terminal.flush(true);
 }
 
-fn print_exit_status<B>(terminal: &mut crate::terminal::Wrapper<B>, samples: &Vec<f64>)
+fn print_exit_status<B>(terminal: &mut crate::terminal::Wrapper<B>, samples: &Vec<f64>, loops: u16)
 where
     B: tui::backend::Backend,
 {
@@ -621,8 +651,8 @@ where
     terminal.queue_fg(crossterm::style::Color::Red);
     terminal.queue_print(crossterm::style::Print(format!(
         "{:>name_width$} ",
-        meas_item_name(&crate::cmd::MeasItem::ExitStatus),
-        name_width = meas_item_name_max_width()
+        meas_item_name(&crate::cmd::MeasItem::ExitStatus, loops),
+        name_width = meas_item_name_max_width(loops)
     )));
     terminal.queue_fg(crossterm::style::Color::Green);
     terminal.queue_print(crossterm::style::Print(format!(

@@ -50,66 +50,82 @@ pub enum MeasItem {
     Unknown(String),
 }
 
-pub fn meas_item_name(item: &MeasItem) -> &str {
+pub fn meas_item_name(item: &MeasItem, loops: u16) -> String {
+    let loops_str = if loops <= 1 {
+        String::from("")
+    } else {
+        format!("/{}", loops)
+    };
     match item {
-        MeasItem::ExitStatus => "Exit status",
-        MeasItem::Real => "Elapsed (wall clock) time",
-        MeasItem::User => "User time",
-        MeasItem::Sys => "System time",
-        MeasItem::CpuUsage => "Percent of CPU this job got",
-        MeasItem::AvgSharedText => "Average shared text size",
-        MeasItem::AvgUnsharedData => "Average unshared data size",
-        MeasItem::AvgStack => "Average stack size",
-        MeasItem::AvgTotal => "Average total size",
-        MeasItem::MaxResident => "Maximum resident set size",
-        MeasItem::AvgResident => "Average resident set size",
-        MeasItem::MajorPageFault => "Requiring I/O page faults",
-        MeasItem::MinorPageFault => "Reclaiming a frame page faults",
-        MeasItem::VoluntaryCtxSwitch => "Voluntary context switches",
-        MeasItem::InvoluntaryCtxSwitch => "Involuntary context switches",
-        MeasItem::Swap => "Swaps",
-        MeasItem::BlockInput => "Block by file system inputs",
-        MeasItem::BlockOutput => "Block by file system outputs",
-        MeasItem::MsgSend => "Socket messages sent",
-        MeasItem::MsgRecv => "Socket messages received",
-        MeasItem::SignalRecv => "Signals received",
-        MeasItem::Page => "Page size",
-        MeasItem::Instruction => "Instructions retired",
-        MeasItem::Cycle => "Cycles elapsed",
-        MeasItem::PeakMemory => "Peak memory footprint",
-        MeasItem::Unknown(name) => name,
+        MeasItem::ExitStatus => format!("Exit status"),
+        MeasItem::Real => format!("Elapsed (wall clock) time{}", loops_str),
+        MeasItem::User => format!("User time{}", loops_str),
+        MeasItem::Sys => format!("System time{}", loops_str),
+        MeasItem::CpuUsage => format!("Percent of CPU this job got"),
+        MeasItem::AvgSharedText => format!("Average shared text size"),
+        MeasItem::AvgUnsharedData => format!("Average unshared data size"),
+        MeasItem::AvgStack => format!("Average stack size"),
+        MeasItem::AvgTotal => format!("Average total size"),
+        MeasItem::MaxResident => format!("Maximum resident set size"),
+        MeasItem::AvgResident => format!("Average resident set size"),
+        MeasItem::MajorPageFault => format!("Requiring I/O page faults{}", loops_str),
+        MeasItem::MinorPageFault => format!("Reclaiming a frame page faults{}", loops_str),
+        MeasItem::VoluntaryCtxSwitch => format!("Voluntary context switches{}", loops_str),
+        MeasItem::InvoluntaryCtxSwitch => format!("Involuntary context switches{}", loops_str),
+        MeasItem::Swap => format!("Swaps{}", loops_str),
+        MeasItem::BlockInput => format!("Block by file system inputs{}", loops_str),
+        MeasItem::BlockOutput => format!("Block by file system outputs{}", loops_str),
+        MeasItem::MsgSend => format!("Socket messages sent{}", loops_str),
+        MeasItem::MsgRecv => format!("Socket messages received{}", loops_str),
+        MeasItem::SignalRecv => format!("Signals received{}", loops_str),
+        MeasItem::Page => format!("Page size"),
+        MeasItem::Instruction => format!("Instructions retired"),
+        MeasItem::Cycle => format!("Cycles elapsed"),
+        MeasItem::PeakMemory => format!("Peak memory footprint"),
+        MeasItem::Unknown(name) => String::from(name),
     }
 }
 
-pub fn meas_item_name_max_width() -> usize {
+pub fn meas_item_name_max_width(loops: u16) -> usize {
     static WIDTH: once_cell::sync::OnceCell<usize> = once_cell::sync::OnceCell::new();
     *WIDTH.get_or_init(|| {
         let mut width = 0;
         for item in MeasItem::iter() {
-            width = std::cmp::max(width, meas_item_name(&item).len());
+            width = std::cmp::max(width, meas_item_name(&item, loops).len());
         }
         width
     })
 }
 
-pub fn meas_item_unit_value(item: &MeasItem, val: f64) -> String {
+pub fn meas_item_unit_value(item: &MeasItem, val: f64, loops: u16) -> String {
     match item {
         MeasItem::Real | MeasItem::User | MeasItem::Sys => {
-            if val < 1.0 {
-                format!("{} ms", round_precision(val * 1000.0, 3))
-            } else if val < 60.0 {
-                format!("{} sec", round_precision(val, 3))
-            } else if val < 60.0 * 60.0 {
-                let min = (val / 60.0).floor();
-                format!("{:02}:{} sec", min, round_precision(val % 60.0, 3))
+            let v = if loops <= 1 { val } else { val / loops as f64 };
+            const SIG_DIGS: i32 = 3;
+            if v < 0.001 {
+                let vv = v * 1_000_000.0;
+                let precision = SIG_DIGS;
+                format!("{} ns", round_precision(vv, precision))
+            } else if v < 1.0 {
+                let vv = v * 1_000.0;
+                let precision = SIG_DIGS - (vv.log10().floor() as i32);
+                format!("{} ms", round_precision(vv, precision))
+            } else if v < 60.0 {
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                format!("{} sec", round_precision(v, precision))
+            } else if v < 60.0 * 60.0 {
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                let min = (v / 60.0).floor();
+                format!("{:02}:{} sec", min, round_precision(v % 60.0, precision))
             } else {
-                let hour = (val / 60.0 / 60.0).floor();
-                let min = ((val - hour * 60.0 * 60.0) / 60.0).floor();
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                let hour = (v / 60.0 / 60.0).floor();
+                let min = ((v - hour * 60.0 * 60.0) / 60.0).floor();
                 format!(
                     "{:02}:{:02}:{} sec",
                     hour,
                     min,
-                    round_precision(val % 60.0, 3)
+                    round_precision(v % 60.0, precision)
                 )
             }
         }
@@ -123,24 +139,34 @@ pub fn meas_item_unit_value(item: &MeasItem, val: f64) -> String {
         | MeasItem::AvgTotal
         | MeasItem::AvgResident
         | MeasItem::PeakMemory => {
+            const SIG_DIGS: i32 = 3;
             const KB: f64 = 1024.0;
             const MB: f64 = 1024.0 * KB;
             const GB: f64 = 1024.0 * MB;
             const TB: f64 = 1024.0 * GB;
             if val < KB {
-                format!("{} byte", round_precision(val, 3))
+                let precision = SIG_DIGS;
+                format!("{} byte", round_precision(val, precision))
             } else if val < MB {
-                format!("{} KiB", round_precision(val / KB, 3))
+                let v = val / KB;
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                format!("{} KiB", round_precision(v, precision))
             } else if val < GB {
-                format!("{} MiB", round_precision(val / MB, 3))
+                let v = val / MB;
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                format!("{} MiB", round_precision(v, precision))
             } else if val < TB {
-                format!("{} GiB", round_precision(val / GB, 3))
+                let v = val / GB;
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                format!("{} GiB", round_precision(v, precision))
             } else {
-                format!("{} TiB", round_precision(val / TB, 3))
+                let v = val / TB;
+                let precision = SIG_DIGS - (v.log10().floor() as i32);
+                format!("{} TiB", round_precision(v, precision))
             }
         }
-        MeasItem::ExitStatus
-        | MeasItem::MajorPageFault
+
+        MeasItem::MajorPageFault
         | MeasItem::MinorPageFault
         | MeasItem::VoluntaryCtxSwitch
         | MeasItem::InvoluntaryCtxSwitch
@@ -149,13 +175,36 @@ pub fn meas_item_unit_value(item: &MeasItem, val: f64) -> String {
         | MeasItem::BlockOutput
         | MeasItem::MsgSend
         | MeasItem::MsgRecv
-        | MeasItem::SignalRecv
+        | MeasItem::SignalRecv => {
+            let v = if loops <= 1 { val } else { val / loops as f64 };
+            const SIG_DIGS: i32 = 3;
+            let precision = if v < 1.0 {
+                SIG_DIGS
+            } else {
+                SIG_DIGS - (v.log10().floor() as i32)
+            };
+            let int = v.floor() as i64;
+            let dec = format!("{}", round_precision(v - int as f64, precision));
+            if dec == "0" {
+                int.to_formatted_string(&num_format::Locale::en)
+            } else {
+                int.to_formatted_string(&num_format::Locale::en) + &dec[1..]
+            }
+        }
+
+        MeasItem::ExitStatus
         | MeasItem::Instruction
         | MeasItem::Cycle
         | MeasItem::Page
         | MeasItem::Unknown(_) => {
+            const SIG_DIGS: i32 = 3;
+            let precision = if val < 1.0 {
+                SIG_DIGS
+            } else {
+                SIG_DIGS - (val.log10().floor() as i32)
+            };
             let int = val.floor() as i64;
-            let dec = format!("{}", round_precision(val - int as f64, 3));
+            let dec = format!("{}", round_precision(val - int as f64, precision));
             if dec == "0" {
                 int.to_formatted_string(&num_format::Locale::en)
             } else {
@@ -392,7 +441,6 @@ impl TimeCmd {
             self.sh.as_str(),
             &[
                 self.sh_arg.as_str(),
-                //format!("{} sh -c 'for i in 1 2 3 4 5 6 7 8 9 10 ;do {};done'", self.command, command).as_str(),
                 format!("{} {}", self.command, command).as_str(),
             ],
         )?;
@@ -483,8 +531,12 @@ fn capture_name_and_val<'a>(cap: &'a regex::Captures) -> (&'a str, f64) {
 }
 
 fn round_precision(val: f64, precision: i32) -> f64 {
-    let rank = 10f64.powi(precision);
-    (val * rank).round() / rank
+    if precision <= 0 {
+        val.round()
+    } else {
+        let rank = 10f64.powi(precision);
+        (val * rank).round() / rank
+    }
 }
 
 #[cfg(test)]
@@ -642,53 +694,71 @@ mod test {
     #[test]
     fn meas_item_unit_value_sec() {
         assert_eq!(
-            "123.457 ms",
-            meas_item_unit_value(&MeasItem::Real, 0.123456789)
+            "123.5 ns",
+            meas_item_unit_value(&MeasItem::Real, 0.123456789, 1000)
         );
         assert_eq!(
-            "12.346 sec",
-            meas_item_unit_value(&MeasItem::Real, 12.3456789)
+            "123.5 ms",
+            meas_item_unit_value(&MeasItem::Real, 0.123456789, 1)
         );
         assert_eq!(
-            "01:23.457 sec",
-            meas_item_unit_value(&MeasItem::Real, 60.0 + 23.456789)
+            "12.35 ms",
+            meas_item_unit_value(&MeasItem::Real, 0.123456789, 10)
         );
         assert_eq!(
-            "59:23.457 sec",
-            meas_item_unit_value(&MeasItem::Real, 59.0 * 60.0 + 23.456789)
+            "12.35 sec",
+            meas_item_unit_value(&MeasItem::Real, 12.3456789, 1)
         );
         assert_eq!(
-            "123:04:56.789 sec",
-            meas_item_unit_value(&MeasItem::Real, 123.0 * 60.0 * 60.0 + 4.0 * 60.0 + 56.789)
+            "01:23.46 sec",
+            meas_item_unit_value(&MeasItem::Real, 60.0 + 23.456789, 1)
+        );
+        assert_eq!(
+            "59:23 sec",
+            meas_item_unit_value(&MeasItem::Real, 59.0 * 60.0 + 23.456789, 1)
+        );
+        assert_eq!(
+            "123:04:57 sec",
+            meas_item_unit_value(
+                &MeasItem::Real,
+                123.0 * 60.0 * 60.0 + 4.0 * 60.0 + 56.789,
+                1
+            )
         );
     }
 
     #[test]
     fn meas_item_unit_value_byte() {
         assert_eq!(
-            "123.457 byte",
-            meas_item_unit_value(&MeasItem::MaxResident, 123.456789)
+            "123.5 byte",
+            meas_item_unit_value(&MeasItem::MaxResident, 123.456789, 1)
         );
         assert_eq!(
-            "12.346 KiB",
-            meas_item_unit_value(&MeasItem::MaxResident, 12.3456789 * 1024.0)
+            "123.5 byte",
+            meas_item_unit_value(&MeasItem::MaxResident, 123.456789, 10)
         );
         assert_eq!(
-            "123.457 MiB",
-            meas_item_unit_value(&MeasItem::MaxResident, 123.456789 * 1024.0 * 1024.0)
+            "12.35 KiB",
+            meas_item_unit_value(&MeasItem::MaxResident, 12.3456789 * 1024.0, 1)
         );
         assert_eq!(
-            "123.457 GiB",
+            "123.5 MiB",
+            meas_item_unit_value(&MeasItem::MaxResident, 123.456789 * 1024.0 * 1024.0, 1)
+        );
+        assert_eq!(
+            "123.5 GiB",
             meas_item_unit_value(
                 &MeasItem::MaxResident,
-                123.456789 * 1024.0 * 1024.0 * 1024.0
+                123.456789 * 1024.0 * 1024.0 * 1024.0,
+                1
             )
         );
         assert_eq!(
-            "1234.568 TiB",
+            "1235 TiB",
             meas_item_unit_value(
                 &MeasItem::MaxResident,
-                1234.56789 * 1024.0 * 1024.0 * 1024.0 * 1024.0
+                1234.56789 * 1024.0 * 1024.0 * 1024.0 * 1024.0,
+                1
             )
         );
     }
@@ -696,28 +766,56 @@ mod test {
     #[test]
     fn meas_item_unit_value_digit() {
         assert_eq!(
-            "123.457",
-            meas_item_unit_value(&MeasItem::Cycle, 123.456789)
+            "123.5",
+            meas_item_unit_value(&MeasItem::Cycle, 123.456789, 1)
         );
         assert_eq!(
-            "123,456.789",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456.789)
+            "123,456",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456.789, 10)
         );
         assert_eq!(
             "123,456,789",
-            meas_item_unit_value(&MeasItem::Cycle, 123456789.0)
+            meas_item_unit_value(&MeasItem::Cycle, 123456789.0, 1)
         );
         assert_eq!(
-            "123,456,789,012.346",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012.3456789)
+            "123,456,789,012",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012.3456789, 1)
         );
         assert_eq!(
             "123,456,789,012,345",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.0)
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.0, 1)
         );
         assert_eq!(
-            "123,456,789,012,345.672",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.6789)
+            "123,456,789,012,345",
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.6789, 1)
+        );
+    }
+
+    #[test]
+    fn meas_item_unit_value_digit_loops() {
+        assert_eq!(
+            "123.5",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123.456789, 1)
+        );
+        assert_eq!(
+            "12,345",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456.789, 10)
+        );
+        assert_eq!(
+            "123,456,789",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123456789.0, 1)
+        );
+        assert_eq!(
+            "12,345,678,901",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012.3456789, 10)
+        );
+        assert_eq!(
+            "123,456,789,012,345",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012_345.0, 1)
+        );
+        assert_eq!(
+            "12,345,678,901,234",
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012_345.6789, 10)
         );
     }
 }

@@ -8,8 +8,25 @@ use clap::Parser;
 #[clap(author, version, about, long_about = None, setting = clap::builder::AppSettings::TrailingVarArg | clap::builder::AppSettings::DeriveDisplayOrder)]
 pub struct CliArgs {
     /// Perform NUM runs for each command.
-    #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 8)]
+    #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 10)]
     pub runs: u16,
+
+    /// Loop NUM times with one measurement run for each command.
+    ///
+    /// That is, each command is executed "runs" × "loops" times.
+    ///
+    /// This is used when a single run is very fast and does not meet the resolution of the time command.
+    /// (e.g., less than 10 ms).
+    ///
+    /// Statistics are calculated in a NUM loop, but are displayed as a value per one run.
+    /// Specifically, time-related items, such as "User time", is divided by NUM and displayed,
+    /// and memory-related items, such as "Maximum resident set size", are displayed as they are.
+    /// Divided values are indicated by "/NUM" in the item name.
+    ///
+    /// The loop uses a "for" statement in "sh", so the extra processing is measured.
+    /// But if loops is 1, it is executed directly without "for" statement.
+    #[clap(long, value_parser, value_name = "NUM", default_value_t = 1)]
+    pub loops: u16,
 
     /// The commands to benchmark.
     ///
