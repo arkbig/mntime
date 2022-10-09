@@ -181,6 +181,7 @@ fn run_app(
             let mut m = model.write().unwrap();
             m.current_reports = Vec::new();
             m.current_max = cli_args.runs;
+            draw_tx.send(DrawMsg::StartMeasure).unwrap();
         }
         for n in 0..cli_args.runs {
             model.write().unwrap().current_run = n;
@@ -227,7 +228,7 @@ fn run_app(
             let mut m = model.write().unwrap();
             m.current_max = 0;
             draw_tx
-                .send(DrawMsg::FinalizeReport(m.current_reports.clone()))
+                .send(DrawMsg::ReportMeasure(m.current_reports.clone()))
                 .unwrap();
         }
     }
@@ -327,11 +328,13 @@ fn command_available(
 enum DrawMsg {
     Quit,
     PrintH(String),
-    FinalizeReport(Vec<HashMap<crate::cmd::MeasItem, f64>>),
+    StartMeasure,
+    ReportMeasure(Vec<HashMap<crate::cmd::MeasItem, f64>>),
 }
 
 #[derive(Default, Debug)]
 struct DrawState {
+    measuring: bool,
     throbber: throbber_widgets_tui::ThrobberState,
 }
 
@@ -357,12 +360,18 @@ fn view_app<B>(
                 return;
             }
             Ok(DrawMsg::PrintH(text)) => {
+                terminal.clear_after();
                 terminal.queue_attribute(crossterm::style::Attribute::Bold);
                 terminal.queue_fg(crossterm::style::Color::Cyan);
                 terminal.queue_print(crossterm::style::Print(text + "\r\n"));
                 terminal.flush(true);
             }
-            Ok(DrawMsg::FinalizeReport(reports)) => {
+            Ok(DrawMsg::StartMeasure) => {
+                draw_state.measuring = true;
+            }
+            Ok(DrawMsg::ReportMeasure(reports)) => {
+                draw_state.measuring = false;
+                terminal.clear_after();
                 print_reports(terminal, reports.as_ref(), cli_args.loops);
             }
             _ => {}
@@ -396,7 +405,7 @@ fn ui<B>(
     B: tui::backend::Backend,
 {
     let mut _offset_y = 0;
-    if 0 < model.current_max {
+    if state.measuring {
         _offset_y += draw_progress(f, model, state, cur_y, _offset_y, loops);
         _offset_y += draw_summary_report(f, model, state, cur_y, _offset_y, loops);
     }
@@ -467,7 +476,7 @@ where
         }
     };
     let gauge = tui::widgets::Gauge::default()
-        .gauge_style(tui::style::Style::default().fg(tui::style::Color::White))
+        .gauge_style(tui::style::Style::default().fg(tui::style::Color::Cyan))
         .ratio(model.current_run as f64 / model.current_max as f64)
         .label(label);
     f.render_widget(gauge, chunks[1]);
@@ -544,8 +553,6 @@ fn print_reports<B>(
     use crate::cmd::{meas_item_name, meas_item_name_max_width, meas_item_unit_value};
 
     const MEAN_WIDTH: usize = 13;
-
-    terminal.clear_after();
 
     let mut lines = Vec::new();
     let mut exist_error = false;
