@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use strum::IntoEnumIterator;
 
 /// The application is started and terminated.
@@ -140,7 +140,7 @@ enum UpdateMsg {
 struct SharedViewModel {
     current_run: u16,
     current_max: u16,
-    current_reports: Box<Vec<HashMap<crate::cmd::MeasItem, f64>>>,
+    current_reports: Vec<HashMap<crate::cmd::MeasItem, f64>>,
 }
 
 /// Updating thread job
@@ -172,14 +172,14 @@ fn run_app(
     for (target_index, target) in cli_args.normalized_commands().iter().enumerate() {
         draw_tx
             .send(DrawMsg::PrintH(format!(
-                "Benchmark #{}: {}",
+                "Benchmark #{}> {}",
                 target_index + 1,
                 target
             )))
             .unwrap();
         {
             let mut m = model.write().unwrap();
-            m.current_reports = Box::new(Vec::new());
+            m.current_reports = Vec::new();
             m.current_max = cli_args.runs;
         }
         for n in 0..cli_args.runs {
@@ -243,10 +243,7 @@ fn wait_recv_quit(
         .checked_sub(last_tick.elapsed())
         .unwrap_or_else(|| std::time::Duration::from_secs(0));
     let msg = rx.recv_timeout(timeout);
-    match msg {
-        Ok(UpdateMsg::Quit) => true,
-        _ => false,
-    }
+    matches!(msg, Ok(UpdateMsg::Quit))
 }
 
 fn prepare_time_commands(
@@ -330,7 +327,7 @@ fn command_available(
 enum DrawMsg {
     Quit,
     PrintH(String),
-    FinalizeReport(Box<Vec<HashMap<crate::cmd::MeasItem, f64>>>),
+    FinalizeReport(Vec<HashMap<crate::cmd::MeasItem, f64>>),
 }
 
 #[derive(Default, Debug)]
@@ -452,7 +449,7 @@ where
             .current_reports
             .iter()
             .filter_map(|x| x.get(&crate::cmd::MeasItem::Real))
-            .map(|x| *x)
+            .copied()
             .collect();
         let stats = crate::stats::Stats::new(&samples);
         if 0.0 < stats.mean {
@@ -514,23 +511,24 @@ where
         )
         .split(rect);
 
-    let mut layout_index = 0;
-    for item in vec![MeasItem::Real, MeasItem::User, MeasItem::Sys] {
+    for (index, item) in vec![MeasItem::Real, MeasItem::User, MeasItem::Sys]
+        .iter()
+        .enumerate()
+    {
         let samples: Vec<_> = model
             .current_reports
             .iter()
-            .filter_map(|x| x.get(&item))
-            .map(|x| *x)
+            .filter_map(|x| x.get(item))
+            .copied()
             .collect();
         let stats = crate::stats::Stats::new(&samples);
         let text = tui::widgets::Paragraph::new(tui::text::Spans::from(format!(
             "{} {} ± {}",
             item.as_ref(),
-            meas_item_unit_value(&item, stats.mean, loops),
-            meas_item_unit_value(&item, stats.stdev, loops),
+            meas_item_unit_value(item, stats.mean, loops),
+            meas_item_unit_value(item, stats.stdev, loops),
         )));
-        f.render_widget(text, chunks[layout_index]);
-        layout_index += 1;
+        f.render_widget(text, chunks[index]);
     }
 
     height
@@ -538,7 +536,7 @@ where
 
 fn print_reports<B>(
     terminal: &mut crate::terminal::Wrapper<B>,
-    reports: &Vec<HashMap<crate::cmd::MeasItem, f64>>,
+    reports: &[HashMap<crate::cmd::MeasItem, f64>],
     loops: u16,
 ) where
     B: tui::backend::Backend,
@@ -555,7 +553,7 @@ fn print_reports<B>(
         let samples: Vec<_> = reports
             .iter()
             .filter_map(|x| x.get(&item))
-            .map(|x| *x)
+            .copied()
             .collect();
         match item {
             crate::cmd::MeasItem::Real | crate::cmd::MeasItem::User | crate::cmd::MeasItem::Sys => {
@@ -566,7 +564,7 @@ fn print_reports<B>(
                 if !samples.iter().any(|&x| x.to_bits() != 0) {
                     continue;
                 }
-                if samples.len() == 0 {
+                if samples.is_empty() {
                     continue;
                 }
             }
@@ -634,10 +632,10 @@ where
 
     let mut histogram = samples.iter().fold(HashMap::<i32, i16>::new(), |mut s, x| {
         let code = x.floor() as i32;
-        if s.contains_key(&code) {
-            *s.get_mut(&code).unwrap() += 1;
+        if let std::collections::hash_map::Entry::Vacant(e) = s.entry(code) {
+            e.insert(1);
         } else {
-            s.insert(code, 1);
+            *s.get_mut(&code).unwrap() += 1;
         }
         s
     });

@@ -57,17 +57,17 @@ pub fn meas_item_name(item: &MeasItem, loops: u16) -> String {
         format!("/{}", loops)
     };
     match item {
-        MeasItem::ExitStatus => format!("Exit status"),
+        MeasItem::ExitStatus => "Exit status".to_string(),
         MeasItem::Real => format!("Elapsed (wall clock) time{}", loops_str),
         MeasItem::User => format!("User time{}", loops_str),
         MeasItem::Sys => format!("System time{}", loops_str),
-        MeasItem::CpuUsage => format!("Percent of CPU this job got"),
-        MeasItem::AvgSharedText => format!("Average shared text size"),
-        MeasItem::AvgUnsharedData => format!("Average unshared data size"),
-        MeasItem::AvgStack => format!("Average stack size"),
-        MeasItem::AvgTotal => format!("Average total size"),
-        MeasItem::MaxResident => format!("Maximum resident set size"),
-        MeasItem::AvgResident => format!("Average resident set size"),
+        MeasItem::CpuUsage => "Percent of CPU this job got".to_string(),
+        MeasItem::AvgSharedText => "Average shared text size".to_string(),
+        MeasItem::AvgUnsharedData => "Average unshared data size".to_string(),
+        MeasItem::AvgStack => "Average stack size".to_string(),
+        MeasItem::AvgTotal => "Average total size".to_string(),
+        MeasItem::MaxResident => "Maximum resident set size".to_string(),
+        MeasItem::AvgResident => "Average resident set size".to_string(),
         MeasItem::MajorPageFault => format!("Requiring I/O page faults{}", loops_str),
         MeasItem::MinorPageFault => format!("Reclaiming a frame page faults{}", loops_str),
         MeasItem::VoluntaryCtxSwitch => format!("Voluntary context switches{}", loops_str),
@@ -78,10 +78,10 @@ pub fn meas_item_name(item: &MeasItem, loops: u16) -> String {
         MeasItem::MsgSend => format!("Socket messages sent{}", loops_str),
         MeasItem::MsgRecv => format!("Socket messages received{}", loops_str),
         MeasItem::SignalRecv => format!("Signals received{}", loops_str),
-        MeasItem::Page => format!("Page size"),
-        MeasItem::Instruction => format!("Instructions retired"),
-        MeasItem::Cycle => format!("Cycles elapsed"),
-        MeasItem::PeakMemory => format!("Peak memory footprint"),
+        MeasItem::Page => "Page size".to_string(),
+        MeasItem::Instruction => "Instructions retired".to_string(),
+        MeasItem::Cycle => "Cycles elapsed".to_string(),
+        MeasItem::PeakMemory => "Peak memory footprint".to_string(),
         MeasItem::Unknown(name) => String::from(name),
     }
 }
@@ -398,7 +398,7 @@ pub fn try_new_gnu_time(alias: bool) -> anyhow::Result<TimeCmd> {
 fn gnu_re() -> &'static regex::Regex {
     static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap()   
+        regex::Regex::new(r"\s*(?P<name>[\w ():/]+): ((?P<hour>\d+)??:?(?P<min>\d+):(?P<sec>[\d.]+)|(?P<val>[\d.]+))").unwrap()   
     })
 }
 
@@ -686,7 +686,7 @@ mod test {
             expected.len(),
             actually
                 .iter()
-                .filter(|kvp| expected[kvp.0.as_str()] == *kvp.1)
+                .filter(|kvp| { expected[kvp.0.as_str()] == *kvp.1 })
                 .count()
         );
     }
@@ -694,7 +694,7 @@ mod test {
     #[test]
     fn meas_item_unit_value_sec() {
         assert_eq!(
-            "123.5 ns",
+            "123.457 ns",
             meas_item_unit_value(&MeasItem::Real, 0.123456789, 1000)
         );
         assert_eq!(
@@ -730,11 +730,11 @@ mod test {
     #[test]
     fn meas_item_unit_value_byte() {
         assert_eq!(
-            "123.5 byte",
+            "123.457 byte",
             meas_item_unit_value(&MeasItem::MaxResident, 123.456789, 1)
         );
         assert_eq!(
-            "123.5 byte",
+            "123.457 byte",
             meas_item_unit_value(&MeasItem::MaxResident, 123.456789, 10)
         );
         assert_eq!(
