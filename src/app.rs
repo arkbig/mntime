@@ -152,7 +152,7 @@ fn run_app(
     cli_args: &crate::cli_args::CliArgs,
 ) -> (proc_exit::Code, Option<String>) {
     // Checking available
-    let time_commands = prepare_time_commands(&rx, tick_rate);
+    let time_commands = prepare_time_commands(&rx, tick_rate, cli_args);
     if time_commands.is_none() {
         // quit
         return (proc_exit::Code::FAILURE, None);
@@ -224,13 +224,11 @@ fn run_app(
                 last_tick = std::time::Instant::now();
             }
         }
-        {
-            let mut m = model.write().unwrap();
-            m.current_max = 0;
-            draw_tx
-                .send(DrawMsg::ReportMeasure(m.current_reports.clone()))
-                .unwrap();
-        }
+        draw_tx
+            .send(DrawMsg::ReportMeasure(
+                model.read().unwrap().current_reports.clone(),
+            ))
+            .unwrap();
     }
     (proc_exit::Code::SUCCESS, None)
 }
@@ -247,45 +245,77 @@ fn wait_recv_quit(
     matches!(msg, Ok(UpdateMsg::Quit))
 }
 
+/// Checks and returns the time command to be used.
+///
+/// The default is to try to run BSD and GNU alternately.
+/// If neither of those is available, use built-in.
 fn prepare_time_commands(
     rx: &std::sync::mpsc::Receiver<UpdateMsg>,
     tick_rate: std::time::Duration,
+    cli_args: &crate::cli_args::CliArgs,
 ) -> Option<Vec<Rc<RefCell<crate::cmd::TimeCmd>>>> {
     let mut commands = Vec::<_>::new();
-    let mut cmd = crate::cmd::try_new_bsd_time();
-    match command_available(rx, tick_rate, &mut cmd) {
-        None => return None,
-        Some(available) => {
-            if available {
-                commands.push(Rc::new(RefCell::new(cmd.unwrap())));
+    if !cli_args.use_builtin {
+        if !cli_args.use_gnu {
+            let mut fallback_sh = false;
+            loop {
+                let mut cmd = crate::cmd::try_new_bsd_time(cli_args, fallback_sh);
+                match command_available(rx, tick_rate, &mut cmd) {
+                    None => return None,
+                    Some(available) => {
+                        if available {
+                            commands.push(Rc::new(RefCell::new(cmd.unwrap())));
+                            break;
+                        } else if fallback_sh {
+                            break;
+                        } else {
+                            fallback_sh = true;
+                        }
+                    }
+                }
             }
         }
-    }
-    let mut is_alias = true;
-    loop {
-        let mut cmd = crate::cmd::try_new_gnu_time(is_alias);
-        match command_available(rx, tick_rate, &mut cmd) {
-            None => return None,
-            Some(available) => {
-                if available {
-                    commands.push(Rc::new(RefCell::new(cmd.unwrap())));
-                    break;
-                } else if is_alias {
-                    // Retry a non-alias version.
-                    is_alias = false;
-                } else {
-                    break;
+        if !cli_args.use_bsd {
+            let mut fallback_sh = false;
+            let mut fallback_time = false;
+            loop {
+                let mut cmd = crate::cmd::try_new_gnu_time(cli_args, fallback_sh, fallback_time);
+                match command_available(rx, tick_rate, &mut cmd) {
+                    None => return None,
+                    Some(available) => {
+                        if available {
+                            commands.push(Rc::new(RefCell::new(cmd.unwrap())));
+                            break;
+                        } else if fallback_sh && fallback_time {
+                            break;
+                        } else if fallback_sh {
+                            fallback_time = true;
+                        } else if fallback_time {
+                            fallback_sh = true;
+                            fallback_time = false;
+                        } else {
+                            fallback_time = true;
+                        }
+                    }
                 }
             }
         }
     }
     if commands.is_empty() {
-        let mut cmd = crate::cmd::try_new_builtin_time();
-        match command_available(rx, tick_rate, &mut cmd) {
-            None => return None,
-            Some(available) => {
-                if available {
-                    commands.push(Rc::new(RefCell::new(cmd.unwrap())));
+        let mut fallback_sh = false;
+        loop {
+            let mut cmd = crate::cmd::try_new_builtin_time(cli_args, fallback_sh);
+            match command_available(rx, tick_rate, &mut cmd) {
+                None => return None,
+                Some(available) => {
+                    if available {
+                        commands.push(Rc::new(RefCell::new(cmd.unwrap())));
+                        break;
+                    } else if fallback_sh {
+                        break;
+                    } else {
+                        fallback_sh = true;
+                    }
                 }
             }
         }

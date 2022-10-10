@@ -28,6 +28,53 @@ pub struct CliArgs {
     #[clap(long, value_parser, value_name = "NUM", default_value_t = 1)]
     pub loops: u16,
 
+    /// Set the shell to use for executing benchmarked commands.
+    ///
+    /// This is executed as `sh -c time command1`.
+    /// If execution confirmation is not obtained, also try `/usr/bin/env bash`.
+    ///
+    /// e.g.) sh, /opt/homebrew/bin/zsh
+    #[clap(short = 'S', long, value_name = "COMMAND", default_value = "sh")]
+    pub shell: String,
+
+    /// Set the shell args to use for executing benchmarked commands.
+    ///
+    /// This would be specified when executing in a POSIX incompatible shell.
+    #[clap(long, value_name = "ARG", default_value = "-c")]
+    pub shell_arg: String,
+
+    /// Use shell built-in time.
+    #[clap(long)]
+    pub use_builtin: bool,
+
+    /// Change shell built-in time command.
+    #[clap(long, value_name = "COMMAND", default_value = "time")]
+    pub builtin: String,
+
+    /// Use BSD time.
+    ///
+    /// The default is to try to run BSD and GNU alternately.
+    /// If neither of those is available, use built-in.
+    #[clap(long)]
+    pub use_bsd: bool,
+
+    /// Change BSD time command.
+    #[clap(long, value_name = "COMMAND", default_value = "/usr/bin/env time -l")]
+    pub bsd: String,
+
+    /// Use GNU time.
+    ///
+    /// The default is to try to run BSD and GNU alternately.
+    /// If neither of those is available, use built-in.
+    #[clap(long)]
+    pub use_gnu: bool,
+
+    /// Change GNU time command.
+    ///
+    /// If execution confirmation is not obtained, also try `/usr/bin/env time -v`.
+    #[clap(long, value_name = "COMMAND", default_value = "gtime -v")]
+    pub gnu: String,
+
     /// The commands to benchmark.
     ///
     /// If multiple commands are specified, each is executed and compared.

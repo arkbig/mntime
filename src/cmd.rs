@@ -234,21 +234,33 @@ pub struct TimeCmd {
     meas_report: Option<HashMap<MeasItem, f64>>,
 }
 
-pub fn try_new_builtin_time() -> anyhow::Result<TimeCmd> {
-    TimeCmd::try_new_with_command("bash", "-c", "time", |err_msg| {
-        let mut meas_items = HashMap::<MeasItem, f64>::new();
-        let re = builtin_re();
-        for cap in re.captures_iter(err_msg) {
-            let (name, v) = capture_name_and_val(&cap);
-            match name {
-                "real" => meas_items.insert(MeasItem::Real, v),
-                "user" => meas_items.insert(MeasItem::User, v),
-                "sys" => meas_items.insert(MeasItem::Sys, v),
-                _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
-            };
-        }
-        meas_items
-    })
+pub fn try_new_builtin_time(
+    cli_args: &crate::cli_args::CliArgs,
+    fallback_sh: bool,
+) -> anyhow::Result<TimeCmd> {
+    TimeCmd::try_new_with_command(
+        &if fallback_sh {
+            "bash".to_string()
+        } else {
+            cli_args.shell.clone()
+        },
+        &cli_args.shell_arg,
+        &cli_args.builtin,
+        |err_msg| {
+            let mut meas_items = HashMap::<MeasItem, f64>::new();
+            let re = builtin_re();
+            for cap in re.captures_iter(err_msg) {
+                let (name, v) = capture_name_and_val(&cap);
+                match name {
+                    "real" => meas_items.insert(MeasItem::Real, v),
+                    "user" => meas_items.insert(MeasItem::User, v),
+                    "sys" => meas_items.insert(MeasItem::Sys, v),
+                    _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
+                };
+            }
+            meas_items
+        },
+    )
 }
 
 fn builtin_re() -> &'static regex::Regex {
@@ -258,40 +270,54 @@ fn builtin_re() -> &'static regex::Regex {
     })
 }
 
-pub fn try_new_bsd_time() -> anyhow::Result<TimeCmd> {
-    TimeCmd::try_new_with_command("sh", "-c", "/usr/bin/env time -l", |err_msg| {
-        let mut meas_items = HashMap::<MeasItem, f64>::new();
-        let re = bsd_re();
-        for cap in re.captures_iter(err_msg) {
-            let (name, v) = capture_name_and_val(&cap);
-            match name {
-                "real" => meas_items.insert(MeasItem::Real, v),
-                "user" => meas_items.insert(MeasItem::User, v),
-                "sys" => meas_items.insert(MeasItem::Sys, v),
-                "maximum resident set size" => meas_items.insert(MeasItem::MaxResident, v),
-                "average shared memory size" => meas_items.insert(MeasItem::AvgSharedText, v),
-                "average unshared data size" => meas_items.insert(MeasItem::AvgUnsharedData, v),
-                "average unshared stack size" => meas_items.insert(MeasItem::AvgStack, v),
-                "page reclaims" => meas_items.insert(MeasItem::MinorPageFault, v),
-                "page faults" => meas_items.insert(MeasItem::MajorPageFault, v),
-                "swaps" => meas_items.insert(MeasItem::Swap, v),
-                "block input operations" => meas_items.insert(MeasItem::BlockInput, v),
-                "block output operations" => meas_items.insert(MeasItem::BlockOutput, v),
-                "messages sent" => meas_items.insert(MeasItem::MsgSend, v),
-                "messages received" => meas_items.insert(MeasItem::MsgRecv, v),
-                "signals received" => meas_items.insert(MeasItem::SignalRecv, v),
-                "voluntary context switches" => meas_items.insert(MeasItem::VoluntaryCtxSwitch, v),
-                "involuntary context switches" => {
-                    meas_items.insert(MeasItem::InvoluntaryCtxSwitch, v)
-                }
-                "instructions retired" => meas_items.insert(MeasItem::Instruction, v),
-                "cycles elapsed" => meas_items.insert(MeasItem::Cycle, v),
-                "peak memory footprint" => meas_items.insert(MeasItem::PeakMemory, v),
-                _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
-            };
-        }
-        meas_items
-    })
+pub fn try_new_bsd_time(
+    cli_args: &crate::cli_args::CliArgs,
+    fallback_sh: bool,
+) -> anyhow::Result<TimeCmd> {
+    TimeCmd::try_new_with_command(
+        &if fallback_sh {
+            "sh".to_string()
+        } else {
+            cli_args.shell.clone()
+        },
+        &cli_args.shell_arg,
+        &cli_args.bsd,
+        |err_msg| {
+            let mut meas_items = HashMap::<MeasItem, f64>::new();
+            let re = bsd_re();
+            for cap in re.captures_iter(err_msg) {
+                let (name, v) = capture_name_and_val(&cap);
+                match name {
+                    "real" => meas_items.insert(MeasItem::Real, v),
+                    "user" => meas_items.insert(MeasItem::User, v),
+                    "sys" => meas_items.insert(MeasItem::Sys, v),
+                    "maximum resident set size" => meas_items.insert(MeasItem::MaxResident, v),
+                    "average shared memory size" => meas_items.insert(MeasItem::AvgSharedText, v),
+                    "average unshared data size" => meas_items.insert(MeasItem::AvgUnsharedData, v),
+                    "average unshared stack size" => meas_items.insert(MeasItem::AvgStack, v),
+                    "page reclaims" => meas_items.insert(MeasItem::MinorPageFault, v),
+                    "page faults" => meas_items.insert(MeasItem::MajorPageFault, v),
+                    "swaps" => meas_items.insert(MeasItem::Swap, v),
+                    "block input operations" => meas_items.insert(MeasItem::BlockInput, v),
+                    "block output operations" => meas_items.insert(MeasItem::BlockOutput, v),
+                    "messages sent" => meas_items.insert(MeasItem::MsgSend, v),
+                    "messages received" => meas_items.insert(MeasItem::MsgRecv, v),
+                    "signals received" => meas_items.insert(MeasItem::SignalRecv, v),
+                    "voluntary context switches" => {
+                        meas_items.insert(MeasItem::VoluntaryCtxSwitch, v)
+                    }
+                    "involuntary context switches" => {
+                        meas_items.insert(MeasItem::InvoluntaryCtxSwitch, v)
+                    }
+                    "instructions retired" => meas_items.insert(MeasItem::Instruction, v),
+                    "cycles elapsed" => meas_items.insert(MeasItem::Cycle, v),
+                    "peak memory footprint" => meas_items.insert(MeasItem::PeakMemory, v),
+                    _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
+                };
+            }
+            meas_items
+        },
+    )
 }
 
 fn bsd_re() -> &'static regex::Regex {
@@ -302,14 +328,22 @@ fn bsd_re() -> &'static regex::Regex {
     })
 }
 
-pub fn try_new_gnu_time(alias: bool) -> anyhow::Result<TimeCmd> {
+pub fn try_new_gnu_time(
+    cli_args: &crate::cli_args::CliArgs,
+    fallback_sh: bool,
+    fallback_time: bool,
+) -> anyhow::Result<TimeCmd> {
     TimeCmd::try_new_with_command(
-        "sh",
-        "-c",
-        if alias {
-            "/usr/bin/env gtime -v"
+        &if fallback_sh {
+            "sh".to_string()
         } else {
-            "/usr/bin/env time -v"
+            cli_args.shell.clone()
+        },
+        &cli_args.shell_arg,
+        &if fallback_time {
+            "/usr/bin/env time -v".to_string()
+        } else {
+            cli_args.gnu.clone()
         },
         |err_msg| {
             let mut meas_items = HashMap::<MeasItem, f64>::new();
@@ -405,14 +439,14 @@ fn gnu_re() -> &'static regex::Regex {
 impl TimeCmd {
     pub fn try_new_with_command(
         sh: &str,
-        sh_arg: &str,
-        command: &str,
+        sh_arg: &String,
+        command: &String,
         parse_meas_items: fn(&str) -> HashMap<MeasItem, f64>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            sh: String::from(sh),
-            sh_arg: String::from(sh_arg),
-            command: String::from(command),
+            sh: sh.to_owned(),
+            sh_arg: sh_arg.clone(),
+            command: command.clone(),
             parse_meas_items,
             // test to use
             process: execute(sh, &[sh_arg, format!("{} true", command).as_str()])?,
