@@ -1,10 +1,14 @@
+//! This file provides application flow.
+//! 
+//! Copyright © ArkBig
+
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use strum::IntoEnumIterator;
 
 /// The application is started and terminated.
 ///
 /// Spawn two threads for updating and drawing the application.
-/// - main thread: Input monitoring.
+/// - main thread (this): Input monitoring.
 /// - updating thread: Business logic processing and updating data for drawing.
 /// - drawing thread: Output process.
 pub fn run() -> proc_exit::ExitResult {
@@ -323,6 +327,7 @@ fn prepare_time_commands(
     Some(commands)
 }
 
+/// Check if the specified time command is available.
 fn command_available(
     rx: &std::sync::mpsc::Receiver<UpdateMsg>,
     tick_rate: std::time::Duration,
@@ -355,6 +360,7 @@ fn command_available(
 // Drawing
 //=============================================================================
 
+/// Messages received by drawing thread.
 enum DrawMsg {
     Quit,
     PrintH(String),
@@ -362,12 +368,14 @@ enum DrawMsg {
     ReportMeasure(Vec<HashMap<crate::cmd::MeasItem, f64>>),
 }
 
+// Drawing thread state.
 #[derive(Default, Debug)]
 struct DrawState {
     measuring: bool,
     throbber: throbber_widgets_tui::ThrobberState,
 }
 
+// Drawing thread job
 fn view_app<B>(
     rx: std::sync::mpsc::Receiver<DrawMsg>,
     tick_rate: std::time::Duration,
@@ -425,6 +433,7 @@ fn view_app<B>(
     }
 }
 
+/// Draw loop.
 fn ui<B>(
     f: &mut tui::Frame<B>,
     model: &SharedViewModel,
@@ -635,7 +644,7 @@ fn print_reports<B>(
                 meas_item_unit_value(&item, stats.min_excluding_outlier(), loops),
                 meas_item_unit_value(&item, stats.median_excluding_outlier(), loops),
                 meas_item_unit_value(&item, stats.max_excluding_outlier(), loops),
-                stats.valid_count(),
+                stats.count_excluding_outlier(),
                 stats.outlier_count,
                 name_width = meas_item_name_max_width(loops),
                 mean_width = MEAN_WIDTH,

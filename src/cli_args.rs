@@ -1,3 +1,7 @@
+//! This file provides cli options and args.
+//! 
+//! Copyright © ArkBig
+
 pub fn parse() -> CliArgs {
     CliArgs::parse()
 }

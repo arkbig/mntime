@@ -1,3 +1,7 @@
+//! This file provides the wrapping function for differences in standard input/output variations.
+//!
+//! Copyright © ArkBig
+
 use std::io::Write;
 
 use crossterm::QueueableCommand;

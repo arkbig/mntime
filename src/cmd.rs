@@ -1,9 +1,14 @@
+//! This file provides processing for the time command.
+//! 
+//! Copyright © ArkBig
+
 use anyhow::Context;
 use num_format::ToFormattedString;
 use std::{collections::HashMap, io::Read};
 use strum::{AsRefStr, EnumIter, IntoEnumIterator};
 use thiserror::Error;
 
+/// Status of time command availability.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ReadyStatus {
     Checking,
@@ -224,6 +229,7 @@ enum CmdError {
     ParseError(&'static str),
 }
 
+/// Processing of the time command is bundled.
 pub struct TimeCmd {
     sh: String,
     sh_arg: String,
@@ -437,6 +443,7 @@ fn gnu_re() -> &'static regex::Regex {
 }
 
 impl TimeCmd {
+    /// Start checking if the time command is available.
     pub fn try_new_with_command(
         sh: &str,
         sh_arg: &String,
@@ -455,6 +462,7 @@ impl TimeCmd {
         })
     }
 
+    /// Check if time command is available.
     pub fn ready_status(&mut self) -> ReadyStatus {
         if self.ready_status == ReadyStatus::Checking && self.is_finished() {
             let err_msg = stderr(&mut self.process);
@@ -467,6 +475,7 @@ impl TimeCmd {
         self.ready_status
     }
 
+    /// Start measurement.
     pub fn execute(&mut self, command: &str) -> anyhow::Result<()> {
         anyhow::ensure!(self.ready_status == ReadyStatus::Ready, CmdError::NotReady);
 
@@ -481,10 +490,12 @@ impl TimeCmd {
         Ok(())
     }
 
+    /// Check if measurement has been finished.
     pub fn is_finished(&mut self) -> bool {
         self.process.try_wait().unwrap().is_some()
     }
 
+    /// Get the output result of time command.
     pub fn get_report(&mut self) -> anyhow::Result<&HashMap<MeasItem, f64>> {
         anyhow::ensure!(self.is_finished(), CmdError::NotFinished);
 
@@ -513,6 +524,7 @@ impl TimeCmd {
     }
 }
 
+/// Execute program.
 fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> {
     std::process::Command::new(program)
         .args(args)
@@ -528,6 +540,7 @@ fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> 
         })
 }
 
+/// Get the stderr of process.
 fn stderr(child: &mut std::process::Child) -> String {
     let mut msg = String::new();
     child
@@ -539,6 +552,7 @@ fn stderr(child: &mut std::process::Child) -> String {
     msg
 }
 
+/// Capture a mix of time and value types.
 fn capture_name_and_val<'a>(cap: &'a regex::Captures) -> (&'a str, f64) {
     let v = if let Some(sec_match) = cap.name("sec") {
         let hour: f64 = if let Some(hour_match) = cap.name("hour") {
@@ -564,6 +578,7 @@ fn capture_name_and_val<'a>(cap: &'a regex::Captures) -> (&'a str, f64) {
     (name, v)
 }
 
+/// Rounding to the nearest decimal place for shrinkage.
 fn round_precision(val: f64, precision: i32) -> f64 {
     if precision <= 0 {
         val.round()

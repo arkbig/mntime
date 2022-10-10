@@ -1,3 +1,7 @@
+//! This file provides statistical calculations.
+//! 
+//! Copyright © ArkBig
+
 /// Statistics data such as mean.
 #[derive(Default, Debug)]
 #[allow(dead_code)]
@@ -142,7 +146,7 @@ impl Stats {
         self.sorted_samples.len()
     }
 
-    pub fn valid_count(&self) -> usize {
+    pub fn count_excluding_outlier(&self) -> usize {
         self.sorted_samples.len() - self.outlier_count
     }
 
@@ -154,7 +158,7 @@ impl Stats {
     pub fn min(&self) -> f64 {
         *self.sorted_samples.first().unwrap()
     }
-    /// The maximum of samples is last().
+    /// The maximum of samples.
     pub fn max(&self) -> f64 {
         *self.sorted_samples.last().unwrap()
     }
@@ -198,7 +202,7 @@ impl Stats {
             0.0
         }
     }
-    /// The coefficient of variation excluding outlier is divided by mean_excluding_outlier.
+
     pub fn calc_cv_excluding_outlier(&self) -> f64 {
         if 0.0 < self.mean_excluding_outlier {
             self.stdev_excluding_outlier / self.mean_excluding_outlier
