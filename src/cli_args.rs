@@ -87,7 +87,7 @@ pub struct CliArgs {
     /// the subsequent ones are considered to be the arguments of the command.
     ///
     /// e.g.) mntime command1 --flag arg -- command2 -- 'command3 -f -- args' command4 -o "output files"
-    #[clap(value_parser)]
+    #[clap(value_parser, required = true)]
     commands: Vec<String>,
 }
 
