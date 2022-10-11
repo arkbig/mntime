@@ -399,10 +399,15 @@ fn view_app<B>(
             }
             Ok(DrawMsg::PrintH(text)) => {
                 terminal.clear_after();
+                static CONTINUE_TIME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if CONTINUE_TIME.load(std::sync::atomic::Ordering::Relaxed) {
+                    terminal.queue_print(crossterm::style::Print("\r\n"));
+                }
                 terminal.queue_attribute(crossterm::style::Attribute::Bold);
                 terminal.queue_fg(crossterm::style::Color::Cyan);
                 terminal.queue_print(crossterm::style::Print(text + "\r\n"));
                 terminal.flush(true);
+                CONTINUE_TIME.store(true, std::sync::atomic::Ordering::Relaxed);
             }
             Ok(DrawMsg::StartMeasure) => {
                 draw_state.measuring = true;
@@ -714,4 +719,5 @@ where
             .join(", ")
     )));
     terminal.queue_attribute(crossterm::style::Attribute::Reset);
+    terminal.flush(true);
 }
