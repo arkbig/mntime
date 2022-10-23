@@ -39,6 +39,10 @@ Yes, I am a new Rustacean, a professional programmer who usually uses C++, C# as
 
 ## Installation
 
+### Rust
+
+Version 1.63.0 or higher is required.
+
 ### Dependent tools
 
 [BSD Time][time] and [GNU Time][gtime]. For example, on Mac:
