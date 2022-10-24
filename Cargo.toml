@@ -2,6 +2,7 @@
 name = "mntime"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.63.0"
 authors = ["arkbig"]
 description = "The mntime command executes the specified \"m\" commands \"n\" times and calculates the mean \"μ\"(\\mu) of usage time and memory."
 readme = "README.md"

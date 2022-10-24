@@ -39,9 +39,9 @@ Yes, I am a new Rustacean, a professional programmer who usually uses C++, C# as
 
 ## Installation
 
-### Rust
+### Rust Version
 
-Version 1.63.0 or higher is required.
+`mntime` requires rustc 1.63.0 or newer.
 
 ### Dependent tools
 
