@@ -1,0 +1,23 @@
+< /*!
+> ![demo](docs/demo.gif)
+< ![demo](https://raw.githubusercontent.com/arkbig/mntime/main/docs/demo.gif)
+> For project:
+> 
+> <details><summary>For personal:</summary>
+> 
+> - Study the Rust language.
+> - Learn how to create TUI tool.
+> - Learn how to use git and GitHub
+> 
+> Yes, I am a new Rustacean, a professional programmer who usually uses C++, C# as language and Perforce for version control.
+> </details>
+> 
+> ```sh
+> cargo license --direct-deps-only --avoid-build-deps --avoid-dev-deps | awk -F ":" 'BEGIN {printf "|License|crate|\n|-|-|\n"} {printf "|%s|%s|\n", $1, $2}'
+> ```
+> 
+> ```sh
+> cargo license --avoid-build-deps --avoid-dev-deps | awk -F ":" 'BEGIN {printf "|License|crate|\n|-|-|\n"} {printf "|%s|%s|\n", $1, $2}'
+> ```
+> 
+< */

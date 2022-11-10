@@ -1,12 +1,10 @@
+// Copyright © ArkBig
 //! This file provides processing for the time command.
-//! 
-//! Copyright © ArkBig
 
-use anyhow::Context;
-use num_format::ToFormattedString;
+use anyhow::Context as _;
+use num_format::ToFormattedString as _;
 use std::{collections::HashMap, io::Read};
-use strum::{AsRefStr, EnumIter, IntoEnumIterator};
-use thiserror::Error;
+use strum::IntoEnumIterator as _;
 
 /// Status of time command availability.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -25,7 +23,7 @@ pub enum ReadyStatus {
 /// [time]:https://www.freebsd.org/cgi/man.cgi?query=time
 /// [gtime]:https://man7.org/linux/man-pages/man1/time.1.html
 /// [getrusage]:https://man7.org/linux/man-pages/man2/getrusage.2.html
-#[derive(Debug, Hash, Eq, PartialEq, Clone, EnumIter, AsRefStr)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, strum::EnumIter, strum::AsRefStr)]
 pub enum MeasItem {
     ExitStatus,
     Real,
@@ -219,7 +217,7 @@ pub fn meas_item_unit_value(item: &MeasItem, val: f64, loops: u16) -> String {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 enum CmdError {
     #[error("Execution command is not ready yet. This is a bug in the source code.")]
     NotReady,
@@ -568,7 +566,7 @@ fn capture_name_and_val<'a>(cap: &'a regex::Captures) -> (&'a str, f64) {
         let sec: f64 = sec_match.as_str().parse().unwrap();
         hour * 60.0 * 60.0 + min * 60.0 + sec
     } else {
-        (&cap["val"]).parse().unwrap()
+        cap["val"].parse().unwrap()
     };
     let name = if let Some(name_match) = cap.name("name") {
         name_match.as_str()

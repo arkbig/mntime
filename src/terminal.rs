@@ -1,10 +1,8 @@
+// Copyright © ArkBig
 //! This file provides the wrapping function for differences in standard input/output variations.
-//!
-//! Copyright © ArkBig
 
-use std::io::Write;
-
-use crossterm::QueueableCommand;
+use crossterm::QueueableCommand as _;
+use std::io::Write as _;
 
 pub struct Wrapper<B>
 where

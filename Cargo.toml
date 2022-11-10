@@ -11,7 +11,8 @@ license = "Zlib"
 keywords = ["time"]
 categories = ["command-line-utilities", "development-tools::profiling"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "mntime_lib"
 
 [dependencies]
 anyhow = "1.0.65"

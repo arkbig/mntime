@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+ROOTDIR=$(cd "$(dirname "$0")" && pwd)
+cd "$ROOTDIR"
+
 # parse args
 FIX=0
 while [ "$1" != "" ]; do
@@ -12,6 +15,8 @@ done
 
 # begin check
 set -x
+
+tools/check_readme.sh
 
 cargo audit
 
@@ -40,8 +45,8 @@ set -e
 set -x
 $CMD_CLIPPY && $exit_code
 
-# cargo test
+cargo test
 
-# cargo doc
+cargo doc
 
 # cargo run --example demo

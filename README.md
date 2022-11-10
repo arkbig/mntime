@@ -41,7 +41,7 @@ Yes, I am a new Rustacean, a professional programmer who usually uses C++, C# as
 
 ### Rust Version
 
-`mntime` requires rustc 1.63.0 or newer.
+MSRV: `mntime` requires rustc 1.63.0 or newer.
 
 ### Dependent tools
 
@@ -57,12 +57,11 @@ If neither of those is available, use bash built-in time, which only measures ti
 
 ### mntime
 
-No convenient package is available yet.
-
 ```sh
-git clone https://github.com/arkbig/mntime.git
-cargo install --path mntime
+cargo install mntime
 ```
+
+Other convenient package is available yet.
 
 ## Usage
 
@@ -78,8 +77,8 @@ result:
 
 ```txt
 Benchmark #1> sleep '1'
-            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count                            
-Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 10                                                    
+            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count
+Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 10
 User time                     :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 System time                   :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 Maximum resident set size     :    1.359 MiB ± 0 byte (0.0 %) [1.359 MiB ≦ 1.359 MiB ≦ 1.359 MiB] / 10
@@ -102,8 +101,8 @@ result:
 
 ```txt
 Benchmark #1> sleep '1'
-            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count                            
-Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 4                                                     
+            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count
+Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 4
 User time                     :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 4
 System time                   :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 4
 Maximum resident set size     :    1.359 MiB ± 0 byte (0.0 %) [1.359 MiB ≦ 1.359 MiB ≦ 1.359 MiB] / 4
@@ -133,8 +132,8 @@ mntime 'sleep 1' 'sleep 0.9' 'sleep 1.1'
 
 ```txt
 Benchmark #1> sleep '1'
-            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count                            
-Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 10                                                    
+            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count
+Elapsed (wall clock) time     :        1 sec ± 0 ns (0.0 %) [1 sec ≦ 1 sec ≦ 1 sec] / 10
 User time                     :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 System time                   :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 Maximum resident set size     :    1.359 MiB ± 0 byte (0.0 %) [1.359 MiB ≦ 1.359 MiB ≦ 1.359 MiB] / 10
@@ -147,8 +146,8 @@ Instructions retired          :    3,105,417 ± 2,386 (0.1 %) [3,102,700 ≦ 3,1
 Cycles elapsed                :    1,713,440 ± 362,263 (21.1 %) [1,204,750 ≦ 1,835,156 ≦ 2,095,253] / 5
 Peak memory footprint         :    896.6 KiB ± 0 byte (0.0 %) [896.6 KiB ≦ 896.6 KiB ≦ 896.6 KiB] / 5
 Benchmark #2> sleep '0.9'
-            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count                            
-Elapsed (wall clock) time     :       900 ms ± 0 ns (0.0 %) [900 ms ≦ 900 ms ≦ 900 ms] / 10                                                 
+            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count
+Elapsed (wall clock) time     :       900 ms ± 0 ns (0.0 %) [900 ms ≦ 900 ms ≦ 900 ms] / 10
 User time                     :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 System time                   :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 Maximum resident set size     :    1.359 MiB ± 0 byte (0.0 %) [1.359 MiB ≦ 1.359 MiB ≦ 1.359 MiB] / 10
@@ -160,8 +159,8 @@ Instructions retired          :    3,104,586 ± 3,725 (0.1 %) [3,099,381 ≦ 3,1
 Cycles elapsed                :    2,058,486 ± 88,114 (4.3 %) [1,960,047 ≦ 2,059,735 ≦ 2,191,571] / 5
 Peak memory footprint         :    896.6 KiB ± 0 byte (0.0 %) [896.6 KiB ≦ 896.6 KiB ≦ 896.6 KiB] / 5
 Benchmark #3> sleep '1.1'
-            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count                            
-Elapsed (wall clock) time     :      1.1 sec ± 0 ns (0.0 %) [1.1 sec ≦ 1.1 sec ≦ 1.1 sec] / 10                                              
+            LEGEND            :         Mean ± σ (Coefficient of variation %) [Min ≦ Median ≦ Max] / Valid count
+Elapsed (wall clock) time     :      1.1 sec ± 0 ns (0.0 %) [1.1 sec ≦ 1.1 sec ≦ 1.1 sec] / 10
 User time                     :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 System time                   :         0 ns ± 0 ns (0.0 %) [0 ns ≦ 0 ns ≦ 0 ns] / 10
 Maximum resident set size     :    1.367 MiB ± 24 KiB (1.7 %) [1.359 MiB ≦ 1.359 MiB ≦ 1.438 MiB] / 10
@@ -221,14 +220,14 @@ cargo license --direct-deps-only --avoid-build-deps --avoid-dev-deps | awk -F ":
 Chain dependencies crates:
 
 ```sh
-argo license --avoid-build-deps --avoid-dev-deps | awk -F ":" 'BEGIN {printf "|License|crate|\n|-|-|\n"} {printf "|%s|%s|\n", $1, $2}'
+cargo license --avoid-build-deps --avoid-dev-deps | awk -F ":" 'BEGIN {printf "|License|crate|\n|-|-|\n"} {printf "|%s|%s|\n", $1, $2}'
 ```
 
 |License|crate|
 |-|-|
 |(MIT OR Apache-2.0) AND Unicode-DFS-2016 (1)| unicode-ident|
 |Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR MIT (1)| wasi|
-|Apache-2.0 OR MIT (54)| anyhow, arrayvec, bitflags, cassowary, cfg-if, clap, clap_derive, clap_lex, getrandom, hashbrown, heck, hermit-abi, indexmap, itoa, libc, lock_api, log, nodrop, num-format, once_cell, os_str_bytes, parking_lot, parking_lot_core, ppv-lite86, proc-exit, proc-macro-error, proc-macro-error-attr, proc-macro2, quote, rand, rand_chacha, rand_core, regex, regex-syntax, rustversion, scopeguard, signal-hook, signal-hook-mio, signal-hook-registry, smallvec, syn, thiserror, thiserror-impl, unicode-segmentation, unicode-width, winapi, winapi-i686-pc-windows-gnu, winapi-x86_64-pc-windows-gnu, windows-sys, windows_aarch64_msvc, windows_i686_gnu, windows_i686_msvc, windows_x86_64_gnu, windows_x86_64_msvc|
+|Apache-2.0 OR MIT (55)| anyhow, arrayvec, bitflags, cassowary, cfg-if, clap, clap_derive, clap_lex, getrandom, hashbrown, heck, hermit-abi, indexmap, itoa, libc, lock_api, log, num-format, once_cell, os_str_bytes, parking_lot, parking_lot_core, ppv-lite86, proc-exit, proc-macro-error, proc-macro-error-attr, proc-macro2, quote, rand, rand_chacha, rand_core, regex, regex-syntax, rustversion, scopeguard, signal-hook, signal-hook-mio, signal-hook-registry, smallvec, syn, thiserror, thiserror-impl, unicode-segmentation, unicode-width, winapi, winapi-i686-pc-windows-gnu, winapi-x86_64-pc-windows-gnu, windows-sys, windows_aarch64_gnullvm, windows_aarch64_msvc, windows_i686_gnu, windows_i686_msvc, windows_x86_64_gnu, windows_x86_64_gnullvm, windows_x86_64_msvc|
 |MIT (10)| atty, crossterm, crossterm_winapi, mio, redox_syscall, strsim, strum, strum_macros, textwrap, tui|
 |MIT OR Unlicense (4)| aho-corasick, memchr, termcolor, winapi-util|
 |Zlib (2)| mntime, throbber-widgets-tui|

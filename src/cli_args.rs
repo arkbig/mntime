@@ -1,14 +1,13 @@
+// Copyright © ArkBig
 //! This file provides cli options and args.
-//! 
-//! Copyright © ArkBig
 
 pub fn parse() -> CliArgs {
     CliArgs::parse()
 }
 
-use clap::Parser;
+use clap::Parser as _;
 /// Command Line Arguments
-#[derive(Debug, Parser)]
+#[derive(Debug, clap::Parser)]
 #[clap(author, version, about, long_about = None, setting = clap::builder::AppSettings::TrailingVarArg | clap::builder::AppSettings::DeriveDisplayOrder)]
 pub struct CliArgs {
     /// Perform NUM runs for each command.

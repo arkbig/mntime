@@ -1,12 +1,12 @@
+// Copyright © ArkBig
 //! This file provides application flow.
-//! 
-//! Copyright © ArkBig
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use strum::IntoEnumIterator;
+use strum::IntoEnumIterator as _;
 
 /// The application is started and terminated.
 ///
+/// Runs on 3 threads, including itself.
 /// Spawn two threads for updating and drawing the application.
 /// - main thread (this): Input monitoring.
 /// - updating thread: Business logic processing and updating data for drawing.
@@ -28,7 +28,6 @@ pub fn run() -> proc_exit::ExitResult {
 
     let mut ret = (proc_exit::Code::SUCCESS, None);
     std::thread::scope(|s| {
-        // Spawn threads
         let draw_tx_clone = draw_tx.clone();
         let updating_thread = s.spawn(|| {
             run_app(
@@ -73,11 +72,13 @@ pub fn run() -> proc_exit::ExitResult {
     });
 
     // Exit Code
-    if ret.0 == proc_exit::Code::SUCCESS && None == ret.1 {
+    let exit_code = ret.0;
+    let exit_msg = ret.1;
+    if exit_code == proc_exit::Code::SUCCESS && exit_msg.is_none() {
         Ok(())
     } else {
-        let res = proc_exit::Exit::new(ret.0);
-        if let Some(msg) = ret.1 {
+        let res = proc_exit::Exit::new(exit_code);
+        if let Some(msg) = exit_msg {
             Err(res.with_message(msg))
         } else {
             Err(res)
@@ -399,7 +400,8 @@ fn view_app<B>(
             }
             Ok(DrawMsg::PrintH(text)) => {
                 terminal.clear_after();
-                static CONTINUE_TIME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                static CONTINUE_TIME: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
                 if CONTINUE_TIME.load(std::sync::atomic::Ordering::Relaxed) {
                     terminal.queue_print(crossterm::style::Print("\r\n"));
                 }

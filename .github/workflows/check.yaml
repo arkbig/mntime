@@ -1,0 +1,71 @@
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: ~/.cargo/
+        key: ${{ runner.os }}-cargo-lint
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+    - name: Audit
+      run: cargo audit
+    - name: Format
+      run: cargo fmt --check --verbose
+    - name: Lint
+      run: cargo clippy
+    - name: Documentation
+      run: cargo doc
+    - name: Install cargo-license
+      run: cargo install cargo-license
+    - name: Check README
+      run: tools/check_readme.sh
+
+  build:
+    needs: [ lint ]
+    timeout-minutes: 10
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        rust:
+          - 1.63.0 # MSRV
+          - beta
+          - nightly
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/
+          target
+        key: ${{ runner.os}}-cargo-build-${{ matrix.rust }}
+    - name: Setup Rust
+      run: |
+        rustup toolchain install --profile minimal ${{ matrix.rust }}
+        rustup override set ${{ matrix.rust }}
+    - name: Build
+      run: cargo check --verbose --release
+    - name: Test
+      run: cargo test --verbose
+      continue-on-error: ${{ matrix.rust == 'nightly' }}

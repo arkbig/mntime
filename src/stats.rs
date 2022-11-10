@@ -1,6 +1,5 @@
+// Copyright © ArkBig
 //! This file provides statistical calculations.
-//! 
-//! Copyright © ArkBig
 
 /// Statistics data such as mean.
 #[derive(Default, Debug)]
