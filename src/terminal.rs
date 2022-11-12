@@ -12,7 +12,7 @@ where
 
     is_in_tty: bool,
     is_out_tty: bool,
-    _is_err_tty: bool,
+    is_err_tty: bool,
 }
 
 impl<B> Wrapper<B>
@@ -24,7 +24,7 @@ where
             terminal: Box::new(tui::Terminal::new(backend).unwrap()),
             is_in_tty: atty::is(atty::Stream::Stdin),
             is_out_tty: atty::is(atty::Stream::Stdout),
-            _is_err_tty: atty::is(atty::Stream::Stderr),
+            is_err_tty: atty::is(atty::Stream::Stderr),
         }
     }
 
@@ -78,9 +78,23 @@ where
                 .unwrap();
         }
     }
+    pub fn queue_attribute_err(&self, attr: crossterm::style::Attribute) {
+        if self.is_out_tty {
+            std::io::stderr()
+                .queue(crossterm::style::SetAttribute(attr))
+                .unwrap();
+        }
+    }
     pub fn queue_fg(&self, color: crossterm::style::Color) {
         if self.is_out_tty {
             std::io::stdout()
+                .queue(crossterm::style::SetForegroundColor(color))
+                .unwrap();
+        }
+    }
+    pub fn queue_fg_err(&self, color: crossterm::style::Color) {
+        if self.is_out_tty {
+            std::io::stderr()
                 .queue(crossterm::style::SetForegroundColor(color))
                 .unwrap();
         }
@@ -91,6 +105,12 @@ where
     {
         std::io::stdout().queue(print).unwrap();
     }
+    pub fn queue_print_err<T>(&self, print: crossterm::style::Print<T>)
+    where
+        T: std::fmt::Display,
+    {
+        std::io::stderr().queue(print).unwrap();
+    }
     pub fn flush(&self, reset: bool) {
         if reset && self.is_out_tty {
             std::io::stdout()
@@ -100,5 +120,15 @@ where
                 .unwrap();
         }
         std::io::stdout().flush().unwrap();
+    }
+    pub fn flush_err(&self, reset: bool) {
+        if reset && self.is_err_tty {
+            std::io::stderr()
+                .queue(crossterm::style::SetAttribute(
+                    crossterm::style::Attribute::Reset,
+                ))
+                .unwrap();
+        }
+        std::io::stderr().flush().unwrap();
     }
 }

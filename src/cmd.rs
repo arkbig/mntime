@@ -227,10 +227,18 @@ enum CmdError {
     ParseError(&'static str),
 }
 
+#[derive(Eq, PartialEq)]
+pub enum CmdType {
+    Builtin,
+    Bsd,
+    Gnu,
+}
+
 /// Processing of the time command is bundled.
 pub struct TimeCmd {
     sh: String,
     sh_arg: String,
+    pub cmd_type: CmdType,
     command: String,
     process: std::process::Child,
     ready_status: ReadyStatus,
@@ -249,6 +257,7 @@ pub fn try_new_builtin_time(
             cli_args.shell.clone()
         },
         &cli_args.shell_arg,
+        CmdType::Builtin,
         &cli_args.builtin,
         |err_msg| {
             let mut meas_items = HashMap::<MeasItem, f64>::new();
@@ -285,6 +294,7 @@ pub fn try_new_bsd_time(
             cli_args.shell.clone()
         },
         &cli_args.shell_arg,
+        CmdType::Bsd,
         &cli_args.bsd,
         |err_msg| {
             let mut meas_items = HashMap::<MeasItem, f64>::new();
@@ -344,6 +354,7 @@ pub fn try_new_gnu_time(
             cli_args.shell.clone()
         },
         &cli_args.shell_arg,
+        CmdType::Gnu,
         &if fallback_time {
             "/usr/bin/env time -v".to_string()
         } else {
@@ -442,15 +453,17 @@ fn gnu_re() -> &'static regex::Regex {
 
 impl TimeCmd {
     /// Start checking if the time command is available.
-    pub fn try_new_with_command(
+    fn try_new_with_command(
         sh: &str,
         sh_arg: &String,
+        cmd_type: CmdType,
         command: &String,
         parse_meas_items: fn(&str) -> HashMap<MeasItem, f64>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             sh: sh.to_owned(),
             sh_arg: sh_arg.clone(),
+            cmd_type,
             command: command.clone(),
             parse_meas_items,
             // test to use

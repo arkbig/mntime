@@ -19,8 +19,11 @@
                     "kind": "bin"
                 }
             },
-            "args": ["-r1", "sleep 0.1"],
-            "cwd": "${workspaceFolder}"
+            "args": ["-r2", "sleep 0.1"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
         },
         {
             "type": "lldb",

@@ -46,31 +46,33 @@ pub struct CliArgs {
     #[clap(long, value_name = "ARG", default_value = "-c")]
     pub shell_arg: String,
 
-    /// Use shell built-in time.
+    /// Use shell built-in time only.
     #[clap(long)]
-    pub use_builtin: bool,
+    pub use_builtin_only: bool,
 
     /// Change shell built-in time command.
     #[clap(long, value_name = "COMMAND", default_value = "time")]
     pub builtin: String,
 
-    /// Use BSD time.
+    /// No BSD time.
     ///
     /// The default is to try to run BSD and GNU alternately.
     /// If neither of those is available, use built-in.
+    /// When this is specified, bsd time is not used.
     #[clap(long)]
-    pub use_bsd: bool,
+    pub no_bsd: bool,
 
     /// Change BSD time command.
     #[clap(long, value_name = "COMMAND", default_value = "/usr/bin/env time -l")]
     pub bsd: String,
 
-    /// Use GNU time.
+    /// No GNU time.
     ///
     /// The default is to try to run BSD and GNU alternately.
     /// If neither of those is available, use built-in.
+    /// When this is specified, gnu time is not used.
     #[clap(long)]
-    pub use_gnu: bool,
+    pub no_gnu: bool,
 
     /// Change GNU time command.
     ///

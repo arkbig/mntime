@@ -171,6 +171,22 @@ fn run_app(
             )),
         );
     }
+    if !cli_args.use_builtin_only {
+        if !cli_args.no_bsd
+            && !time_commands
+                .iter()
+                .any(|x| x.borrow().cmd_type == crate::cmd::CmdType::Bsd)
+        {
+            draw_tx.send(DrawMsg::Warn("The bsd time command not found. Please install or specify `--no-bsd` to turn off this warning.".to_string())).unwrap();
+        }
+        if !cli_args.no_gnu
+            && !time_commands
+                .iter()
+                .any(|x| x.borrow().cmd_type == crate::cmd::CmdType::Gnu)
+        {
+            draw_tx.send(DrawMsg::Warn("The gnu time command not found. Please install or specify `--no-gnu=` to turn off this warning.".to_string())).unwrap();
+        }
+    }
 
     // Benchmarking
     let mut last_tick = std::time::Instant::now();
@@ -260,8 +276,8 @@ fn prepare_time_commands(
     cli_args: &crate::cli_args::CliArgs,
 ) -> Option<Vec<Rc<RefCell<crate::cmd::TimeCmd>>>> {
     let mut commands = Vec::<_>::new();
-    if !cli_args.use_builtin {
-        if !cli_args.use_gnu {
+    if !cli_args.use_builtin_only {
+        if !cli_args.no_bsd {
             let mut fallback_sh = false;
             loop {
                 let mut cmd = crate::cmd::try_new_bsd_time(cli_args, fallback_sh);
@@ -280,7 +296,7 @@ fn prepare_time_commands(
                 }
             }
         }
-        if !cli_args.use_bsd {
+        if !cli_args.no_gnu {
             let mut fallback_sh = false;
             let mut fallback_time = false;
             loop {
@@ -364,6 +380,7 @@ fn command_available(
 /// Messages received by drawing thread.
 enum DrawMsg {
     Quit,
+    Warn(String),
     PrintH(String),
     StartMeasure,
     ReportMeasure(Vec<HashMap<crate::cmd::MeasItem, f64>>),
@@ -397,6 +414,14 @@ fn view_app<B>(
         match msg {
             Ok(DrawMsg::Quit) => {
                 return;
+            }
+            Ok(DrawMsg::Warn(text)) => {
+                terminal.clear_after();
+                terminal.queue_attribute_err(crossterm::style::Attribute::Bold);
+                terminal.queue_fg_err(crossterm::style::Color::Yellow);
+                terminal
+                    .queue_print_err(crossterm::style::Print(format!("[WARNING]: {0}\r\n", text)));
+                terminal.flush_err(true);
             }
             Ok(DrawMsg::PrintH(text)) => {
                 terminal.clear_after();
