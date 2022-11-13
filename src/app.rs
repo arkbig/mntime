@@ -49,8 +49,9 @@ pub fn run() -> proc_exit::ExitResult {
         });
 
         // Input monitoring.
+        let is_in_tty = atty::is(atty::Stream::Stdin);
         while !updating_thread.is_finished() {
-            if crossterm::event::poll(update_tick_rate).unwrap() {
+            if is_in_tty && crossterm::event::poll(update_tick_rate).unwrap() {
                 if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
                     use crossterm::event::{KeyCode, KeyModifiers};
                     match (key.code, key.modifiers) {
@@ -96,20 +97,24 @@ impl Drop for CliFinalizer {
 /// Initialize cli environment.
 ///
 /// This returns a CliFinalizer that implements Drop, so please be good.
-fn initialize_cli() -> CliFinalizer {
-    // Automatic finalizer setup
-    let default_panic_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        // stdout is disrupted, so the finalize first.
-        finalize_cli();
-        default_panic_hook(panic_info);
-    }));
-    let _cli_finalizer = CliFinalizer;
+fn initialize_cli() -> Option<CliFinalizer> {
+    if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stderr) {
+        // Automatic finalizer setup
+        let default_panic_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            // stdout is disrupted, so the finalize first.
+            finalize_cli();
+            default_panic_hook(panic_info);
+        }));
+        let _cli_finalizer = CliFinalizer;
 
-    crossterm::terminal::enable_raw_mode().unwrap();
-    //crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture).unwrap();
+        crossterm::terminal::enable_raw_mode().unwrap();
+        //crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture).unwrap();
 
-    _cli_finalizer
+        Some(_cli_finalizer)
+    } else {
+        None
+    }
 }
 
 /// Finalize cli environment.
@@ -119,16 +124,18 @@ fn initialize_cli() -> CliFinalizer {
 /// It can be called in duplicate, and even if some errors occur,
 /// all termination processing is performed anyway.
 fn finalize_cli() {
-    // if let Err(err) = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)
-    // {
-    //     eprintln!("[ERROR] {}", err);
-    // }
+    if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stderr) {
+        // if let Err(err) = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)
+        // {
+        //     eprintln!("[ERROR] {}", err);
+        // }
 
-    if let Err(err) = crossterm::terminal::disable_raw_mode() {
-        eprintln!("[ERROR] {}", err);
+        if let Err(err) = crossterm::terminal::disable_raw_mode() {
+            eprintln!("[ERROR] {}", err);
+        }
+        // Instead of resetting the cursor position.
+        println!();
     }
-    // Instead of resetting the cursor position.
-    println!();
 }
 
 //=============================================================================
@@ -726,18 +733,18 @@ where
     failure_codes.sort_by(|a, b| a.0.cmp(b.0));
     terminal.queue_fg(crossterm::style::Color::Red);
     terminal.queue_print(crossterm::style::Print(format!(
-        "{:>name_width$} ",
+        "{:>name_width$}: ",
         meas_item_name(&crate::cmd::MeasItem::ExitStatus, loops),
         name_width = meas_item_name_max_width(loops)
     )));
     terminal.queue_fg(crossterm::style::Color::Green);
     terminal.queue_print(crossterm::style::Print(format!(
-        "Success {} times ",
+        "Success {} times. ",
         success
     )));
     terminal.queue_fg(crossterm::style::Color::Red);
     terminal.queue_print(crossterm::style::Print(format!(
-        "Failure {} times [(code× times) {}]\r\n",
+        "Failure {} times. [(code× times) {}]\r\n",
         failure,
         failure_codes
             .iter()

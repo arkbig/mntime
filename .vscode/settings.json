@@ -5,6 +5,7 @@
         "mntime",
         "powi",
         "Queueable",
+        "repr",
         "stdev",
         "thiserror",
         "ulps",

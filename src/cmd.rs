@@ -839,7 +839,7 @@ mod test {
         );
         assert_eq!(
             "123,456,789,012",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012.3456789, 1)
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012.345_67, 1)
         );
         assert_eq!(
             "123,456,789,012,345",
@@ -847,7 +847,7 @@ mod test {
         );
         assert_eq!(
             "123,456,789,012,345",
-            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.6789, 1)
+            meas_item_unit_value(&MeasItem::Cycle, 123_456_789_012_345.67, 1)
         );
     }
 
@@ -867,7 +867,7 @@ mod test {
         );
         assert_eq!(
             "12,345,678,901",
-            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012.3456789, 10)
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012.345_67, 10)
         );
         assert_eq!(
             "123,456,789,012,345",
@@ -875,7 +875,7 @@ mod test {
         );
         assert_eq!(
             "12,345,678,901,234",
-            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012_345.6789, 10)
+            meas_item_unit_value(&MeasItem::MajorPageFault, 123_456_789_012_345.67, 10)
         );
     }
 }
