@@ -20,11 +20,17 @@ where
     B: tui::backend::Backend,
 {
     pub fn new(backend: B) -> Self {
-        Wrapper {
-            terminal: Box::new(tui::Terminal::new(backend).unwrap()),
-            is_in_tty: atty::is(atty::Stream::Stdin),
-            is_out_tty: atty::is(atty::Stream::Stdout),
-            is_err_tty: atty::is(atty::Stream::Stderr),
+        match tui::Terminal::new(backend) {
+            Err(e) => {
+                println!("{:#?}", e);
+                panic!();
+            }
+            Ok(t) => Wrapper {
+                terminal: Box::new(t),
+                is_in_tty: atty::is(atty::Stream::Stdin),
+                is_out_tty: atty::is(atty::Stream::Stdout),
+                is_err_tty: atty::is(atty::Stream::Stderr),
+            },
         }
     }
 
