@@ -76,8 +76,8 @@ impl Stats {
         let coefficient = 1.4826;
         let lcl = median - 3.0 * coefficient * mad; // 下限管理限界
         let ucl = median + 3.0 * coefficient * mad; // 上限管理限界
-        let min = *sorted.first().unwrap();
-        let max = *sorted.last().unwrap();
+        let min = *sorted.first().unwrap_or(&0.0);
+        let max = *sorted.last().unwrap_or(&0.0);
 
         let outlier_count: usize = if lcl <= min && max <= ucl {
             0
@@ -151,27 +151,18 @@ impl Stats {
 
     /// The middle of samples
     pub fn median(&self) -> f64 {
-        if self.sorted_samples.is_empty() {
-            0.0
-        } else {
-            self.sorted_samples[self.sorted_samples.len() / 2]
-        }
+        *self
+            .sorted_samples
+            .get(self.sorted_samples.len() / 2)
+            .unwrap_or(&0.0)
     }
     /// The minimum of samples
     pub fn min(&self) -> f64 {
-        if self.sorted_samples.is_empty() {
-            0.0
-        } else {
-            *self.sorted_samples.first().unwrap()
-        }
+        *self.sorted_samples.first().unwrap_or(&0.0)
     }
     /// The maximum of samples.
     pub fn max(&self) -> f64 {
-        if self.sorted_samples.is_empty() {
-            0.0
-        } else {
-            *self.sorted_samples.last().unwrap()
-        }
+        *self.sorted_samples.last().unwrap_or(&0.0)
     }
 
     pub fn min_excluding_outlier(&self) -> f64 {
@@ -179,7 +170,7 @@ impl Stats {
             .sorted_samples
             .iter()
             .find(|x| self.lcl <= **x)
-            .unwrap()
+            .unwrap_or(&0.0)
     }
     pub fn max_excluding_outlier(&self) -> f64 {
         *self
@@ -187,7 +178,7 @@ impl Stats {
             .iter()
             .filter(|x| **x <= self.ucl)
             .nth_back(0)
-            .unwrap()
+            .unwrap_or(&0.0)
     }
     pub fn median_excluding_outlier(&self) -> f64 {
         let mut excluding_outlier = self
@@ -195,7 +186,7 @@ impl Stats {
             .iter()
             .filter(|x| self.lcl <= **x && **x <= self.ucl);
         let count = excluding_outlier.clone().count();
-        *excluding_outlier.nth(count / 2).unwrap()
+        *excluding_outlier.nth(count / 2).unwrap_or(&0.0)
     }
 
     /// Has outlier?
@@ -413,5 +404,26 @@ mod test {
         assert_eq!(3, search_right(&sorted, 0.0, 3, sorted.len()));
         assert_eq!(5, search_right(&sorted, 4.0, 3, sorted.len()));
         assert_eq!(6, search_right(&sorted, 5.0, 3, sorted.len()));
+    }
+
+    #[test]
+    fn empty_samples() {
+        let samples = vec![];
+        let stats = Stats::new(&samples);
+        assert_eq!(stats.sorted_samples, vec![]);
+        assert_eq!(stats.nan_count, 0);
+        assert_ulps_eq!(stats.mad, 0.0);
+        assert_eq!(stats.outlier_count, 0);
+        assert_ulps_eq!(stats.lcl, 0.0);
+        assert_ulps_eq!(stats.ucl, 0.0);
+        assert_ulps_eq!(stats.mean, 0.0);
+        assert_ulps_eq!(stats.mean_excluding_outlier, stats.mean);
+        assert_ulps_eq!(stats.stdev, 0.0);
+        assert_ulps_eq!(stats.stdev_excluding_outlier, stats.stdev);
+        assert_eq!(stats.count(), 0);
+        assert_eq!(stats.median(), 0.0);
+        assert_eq!(stats.min(), 0.0);
+        assert_eq!(stats.max(), 0.0);
+        assert_eq!(stats.has_outlier(), false);
     }
 }
