@@ -8,7 +8,7 @@ pub struct Wrapper<B>
 where
     B: tui::backend::Backend,
 {
-    terminal: Box<tui::Terminal<B>>,
+    terminal: Option<Box<tui::Terminal<B>>>,
 
     is_in_tty: bool,
     is_out_tty: bool,
@@ -20,38 +20,51 @@ where
     B: tui::backend::Backend,
 {
     pub fn new(backend: B) -> Self {
-        match tui::Terminal::new(backend) {
-            Err(e) => {
-                println!("{:#?}", e);
-                panic!();
+        let is_in_tty = atty::is(atty::Stream::Stdin);
+        let is_out_tty = atty::is(atty::Stream::Stdout);
+        let is_err_tty = atty::is(atty::Stream::Stderr);
+        let terminal = if is_in_tty && is_out_tty {
+            if let Ok(t) = tui::Terminal::new(backend) {
+                Some(Box::new(t))
+            } else {
+                None
             }
-            Ok(t) => Wrapper {
-                terminal: Box::new(t),
-                is_in_tty: atty::is(atty::Stream::Stdin),
-                is_out_tty: atty::is(atty::Stream::Stdout),
-                is_err_tty: atty::is(atty::Stream::Stderr),
-            },
+        } else {
+            None
+        };
+        Wrapper {
+            terminal,
+            is_in_tty,
+            is_out_tty,
+            is_err_tty,
         }
     }
 
-    pub fn terminal(&self) -> &tui::Terminal<B> {
-        self.terminal.as_ref()
-    }
-    pub fn terminal_mut(&mut self) -> &mut tui::Terminal<B> {
-        self.terminal.as_mut()
+    pub fn terminal_mut(&mut self) -> Option<&mut tui::Terminal<B>> {
+        match &mut self.terminal {
+            Some(t) => Some(t.as_mut()),
+            None => None,
+        }
     }
 
     pub fn get_cursor(&mut self) -> (u16, u16) {
-        if self.is_in_tty && self.is_out_tty {
-            self.terminal_mut().get_cursor().unwrap()
-        } else {
-            (0, self.terminal().size().unwrap().y)
+        let is_in_tty = self.is_in_tty;
+        let is_out_tty = self.is_out_tty;
+        match self.terminal_mut() {
+            Some(t) => {
+                if is_in_tty && is_out_tty {
+                    t.get_cursor().unwrap()
+                } else {
+                    (0, t.size().unwrap().y)
+                }
+            }
+            None => (0, 0),
         }
     }
 
     pub fn set_cursor(&mut self, x: u16, y: u16) {
-        if self.is_out_tty {
-            self.terminal.set_cursor(x, y).unwrap();
+        if self.is_out_tty && self.terminal.is_some() {
+            self.terminal_mut().unwrap().set_cursor(x, y).unwrap();
         }
     }
 
@@ -59,8 +72,8 @@ where
     where
         F: FnOnce(&mut tui::Frame<B>),
     {
-        if self.is_out_tty {
-            self.terminal_mut().draw(f).unwrap();
+        if self.is_out_tty && self.terminal.is_some() {
+            self.terminal_mut().unwrap().draw(f).unwrap();
         }
     }
 
