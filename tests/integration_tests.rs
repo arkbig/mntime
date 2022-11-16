@@ -67,7 +67,7 @@ fn failure_command_is_supported() {
         .assert()
         .success()
         .stdout(predicates::str::contains(
-            "Exit status: Success 0 times. Failure 3 times. [(code× times) 1× 3]",
+            "Exit status: Success 0 times. Failure 3 times. [(code× times)",
         ));
 }
 
@@ -89,7 +89,7 @@ fn execution_count_change_is_supported() {
         .arg("echo dummy benchmark")
         .assert()
         .success()
-        .stdout(predicates::str::contains("/3:"));
+        .stdout(predicates::str::contains("/3 "));
 }
 
 #[test]
@@ -114,18 +114,31 @@ fn only_using_builtin_time_is_supported() {
 }
 
 #[test]
-fn warns_about_missing_bsd_and_gnu_time_commands() {
+fn warns_about_missing_bsd_time_commands() {
     mntime()
         .arg("--runs=1")
         .arg("--bsd=/this_will_never_exist")
+        .arg("--no-gnu")
+        .arg("echo dummy benchmark")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Percent of CPU this job got").not())
+        .stderr(predicates::str::contains(
+            "[WARNING]: The bsd time command not found.",
+        ));
+}
+
+#[test]
+fn warns_about_missing_gnu_time_commands() {
+    mntime()
+        .arg("--runs=1")
+        .arg("--no-bsd")
         .arg("--gnu=/this_will_never_exist")
         .arg("echo dummy benchmark")
         .assert()
         .success()
-        .stdout(predicates::str::contains("Reclaiming a frame page faults:").not())
-        .stderr(
-            predicates::str::contains("[WARNING]: The bsd time command not found.").and(
-                predicates::str::contains("[WARNING]: The gnu time command not found."),
-            ),
-        );
+        .stdout(predicates::str::contains("Instructions retired").not())
+        .stderr(predicates::str::contains(
+            "[WARNING]: The gnu time command not found.",
+        ));
 }
