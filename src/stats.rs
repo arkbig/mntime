@@ -151,15 +151,27 @@ impl Stats {
 
     /// The middle of samples
     pub fn median(&self) -> f64 {
-        self.sorted_samples[self.sorted_samples.len() / 2]
+        if self.sorted_samples.is_empty() {
+            0.0
+        } else {
+            self.sorted_samples[self.sorted_samples.len() / 2]
+        }
     }
     /// The minimum of samples
     pub fn min(&self) -> f64 {
-        *self.sorted_samples.first().unwrap()
+        if self.sorted_samples.is_empty() {
+            0.0
+        } else {
+            *self.sorted_samples.first().unwrap()
+        }
     }
     /// The maximum of samples.
     pub fn max(&self) -> f64 {
-        *self.sorted_samples.last().unwrap()
+        if self.sorted_samples.is_empty() {
+            0.0
+        } else {
+            *self.sorted_samples.last().unwrap()
+        }
     }
 
     pub fn min_excluding_outlier(&self) -> f64 {
