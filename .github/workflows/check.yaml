@@ -51,7 +51,7 @@ jobs:
         os:
           - macos-latest
           - ubuntu-latest
-          - windows-latest
+          # - windows-latest
     steps:
     - uses: actions/checkout@v3
     - uses: actions/cache@v3
@@ -69,3 +69,4 @@ jobs:
     - name: Test
       run: cargo test --verbose
       continue-on-error: ${{ matrix.rust == 'nightly' }}
+      shell: bash
