@@ -88,7 +88,7 @@ fn execution_count_change_is_supported() {
         // .stdout(std::process::Stdio::null())
         // .stderr(std::process::Stdio::piped())
         .spawn();
-    cmd.unwrap().wait_with_output();
+    cmd.unwrap().wait_with_output().unwrap();
     mntime()
         .arg("--runs=2")
         .arg("--loops=3")
@@ -105,7 +105,7 @@ fn shell_change_is_supported() {
         // .stdout(std::process::Stdio::null())
         // .stderr(std::process::Stdio::piped())
         .spawn();
-    cmd.unwrap().wait_with_output();
+    cmd.unwrap().wait_with_output().unwrap();
     mntime()
         .arg("--runs=1")
         .arg("--shell=bash")
