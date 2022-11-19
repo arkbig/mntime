@@ -124,7 +124,7 @@ fn warns_about_missing_bsd_time_commands() {
         .success()
         .stdout(predicates::str::contains("Percent of CPU this job got").not())
         .stderr(predicates::str::contains(
-            "[WARNING]: TEST The bsd time command not found.",
+            "The bsd time command not found.",
         ));
 }
 
@@ -139,6 +139,6 @@ fn warns_about_missing_gnu_time_commands() {
         .success()
         .stdout(predicates::str::contains("Instructions retired").not())
         .stderr(predicates::str::contains(
-            "[WARNING]: The gnu time command not found.",
+            "The gnu time command not found.",
         ));
 }
