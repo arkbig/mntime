@@ -94,21 +94,6 @@ fn execution_count_change_is_supported() {
 
 #[test]
 fn shell_change_is_supported() {
-    let cmd = std::process::Command::new("bash")
-        .args(&["-c", "time 'sleep' 1"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn();
-    let o = cmd.unwrap().wait_with_output().unwrap();
-    let f = format!(
-        "{}\r\n[OUT]{}\r\n[ERR]{}",
-        o.status,
-        std::str::from_utf8(&o.stdout).unwrap(),
-        std::str::from_utf8(&o.stderr).unwrap()
-    );
-    println!("{}", f);
-    assert!(f.contains("ok"));
-
     mntime()
         .arg("--runs=1")
         .arg("--shell=bash")

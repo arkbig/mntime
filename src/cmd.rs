@@ -250,7 +250,6 @@ pub fn try_new_builtin_time(
     cli_args: &crate::cli_args::CliArgs,
     fallback_sh: bool,
 ) -> anyhow::Result<TimeCmd> {
-    println!("try_new_builtin_time {}", fallback_sh);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "bash".to_string()
@@ -272,7 +271,10 @@ pub fn try_new_builtin_time(
                     _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
                 };
             }
-            println!("try_new_builtin_time:{:?}", meas_items);
+            const MINIMUM_ITEM_COUNT: usize = 3;
+            if meas_items.len() < MINIMUM_ITEM_COUNT {
+                meas_items.clear();
+            }
             meas_items
         },
     )
@@ -289,7 +291,6 @@ pub fn try_new_bsd_time(
     cli_args: &crate::cli_args::CliArgs,
     fallback_sh: bool,
 ) -> anyhow::Result<TimeCmd> {
-    println!("try_new_bsd_time {}", fallback_sh);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "sh".to_string()
@@ -332,7 +333,10 @@ pub fn try_new_bsd_time(
                     _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
                 };
             }
-            println!("try_new_bsd_time:{:?}", meas_items);
+            const MINIMUM_ITEM_COUNT: usize = 3; // Minimum 3 to allow any change except real, user, and sys.
+            if meas_items.len() < MINIMUM_ITEM_COUNT {
+                meas_items.clear();
+            }
             meas_items
         },
     )
@@ -351,7 +355,6 @@ pub fn try_new_gnu_time(
     fallback_sh: bool,
     fallback_time: bool,
 ) -> anyhow::Result<TimeCmd> {
-    println!("try_new_gnu_time {} {}", fallback_sh, fallback_time);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "sh".to_string()
@@ -444,7 +447,10 @@ pub fn try_new_gnu_time(
                     }
                 };
             }
-            println!("try_new_gnu_time {:?}", meas_items);
+            const MINIMUM_ITEM_COUNT: usize = 3; // Minimum 3 to allow any change except real, user, and sys.
+            if meas_items.len() < MINIMUM_ITEM_COUNT {
+                meas_items.clear();
+            }
             meas_items
         },
     )
@@ -543,7 +549,6 @@ impl TimeCmd {
 
 /// Execute program.
 fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> {
-    println!("[EXEC] {} {}", program, args.join(" "));
     std::process::Command::new(program)
         .args(args)
         .stdout(std::process::Stdio::null())
