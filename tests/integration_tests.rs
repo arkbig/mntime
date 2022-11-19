@@ -74,8 +74,6 @@ fn failure_command_is_supported() {
 #[test]
 fn run_count_change_is_supported() {
     mntime()
-        .arg("--no-bsd")
-        .arg("--no-gnu")
         .arg("--runs=3")
         .arg("echo dummy benchmark")
         .assert()
@@ -86,8 +84,6 @@ fn run_count_change_is_supported() {
 #[test]
 fn execution_count_change_is_supported() {
     mntime()
-        .arg("--no-bsd")
-        .arg("--no-gnu")
         .arg("--runs=2")
         .arg("--loops=3")
         .arg("echo dummy benchmark")
