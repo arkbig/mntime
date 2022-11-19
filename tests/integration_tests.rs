@@ -124,7 +124,7 @@ fn warns_about_missing_bsd_time_commands() {
         .success()
         .stdout(predicates::str::contains("Percent of CPU this job got").not())
         .stderr(predicates::str::contains(
-            "[WARNING]: The bsd time command not found.",
+            "[WARNING]: TEST The bsd time command not found.",
         ));
 }
 
