@@ -114,19 +114,6 @@ fn only_using_builtin_time_is_supported() {
 }
 
 #[test]
-fn warns_about_missing_gnu_time_commands() {
-    mntime()
-        .arg("--runs=1")
-        .arg("--no-bsd")
-        .arg("--gnu=/this_will_never_exist")
-        .arg("echo dummy benchmark")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("Instructions retired").not())
-        .stderr(predicates::str::contains("The gnu time command not found."));
-}
-
-#[test]
 fn warns_about_missing_bsd_time_commands() {
     mntime()
         .arg("--runs=1")
@@ -136,5 +123,7 @@ fn warns_about_missing_bsd_time_commands() {
         .assert()
         .success()
         .stdout(predicates::str::contains("Percent of CPU this job got").not())
-        .stderr(predicates::str::contains("The bsd time command not found."));
+        .stderr(predicates::str::contains(
+            "[WARNING]: The bsd time command not found.",
+        ));
 }
