@@ -272,6 +272,7 @@ pub fn try_new_builtin_time(
                     _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
                 };
             }
+            println!("try_new_builtin_time:{:?}", meas_items);
             meas_items
         },
     )
@@ -331,6 +332,7 @@ pub fn try_new_bsd_time(
                     _ => meas_items.insert(MeasItem::Unknown(String::from(name)), v),
                 };
             }
+            println!("try_new_bsd_time:{:?}", meas_items);
             meas_items
         },
     )
@@ -442,6 +444,7 @@ pub fn try_new_gnu_time(
                     }
                 };
             }
+            println!("try_new_gnu_time {:?}", meas_items);
             meas_items
         },
     )
