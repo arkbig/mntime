@@ -83,6 +83,12 @@ fn run_count_change_is_supported() {
 
 #[test]
 fn execution_count_change_is_supported() {
+    let cmd = std::process::Command::new("bash")
+        .args(&["-c", "echo", "ok"])
+        // .stdout(std::process::Stdio::null())
+        // .stderr(std::process::Stdio::piped())
+        .spawn();
+    cmd.unwrap().wait_with_output();
     mntime()
         .arg("--runs=2")
         .arg("--loops=3")
@@ -94,6 +100,12 @@ fn execution_count_change_is_supported() {
 
 #[test]
 fn shell_change_is_supported() {
+    let cmd = std::process::Command::new("bash")
+        .args(&["-c", "time", "echo", "ok"])
+        // .stdout(std::process::Stdio::null())
+        // .stderr(std::process::Stdio::piped())
+        .spawn();
+    cmd.unwrap().wait_with_output();
     mntime()
         .arg("--runs=1")
         .arg("--shell=bash")
