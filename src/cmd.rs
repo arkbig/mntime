@@ -250,6 +250,7 @@ pub fn try_new_builtin_time(
     cli_args: &crate::cli_args::CliArgs,
     fallback_sh: bool,
 ) -> anyhow::Result<TimeCmd> {
+    println!("try_new_builtin_time {}", fallback_sh);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "bash".to_string()
@@ -287,6 +288,7 @@ pub fn try_new_bsd_time(
     cli_args: &crate::cli_args::CliArgs,
     fallback_sh: bool,
 ) -> anyhow::Result<TimeCmd> {
+    println!("try_new_bsd_time {}", fallback_sh);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "sh".to_string()
@@ -347,6 +349,7 @@ pub fn try_new_gnu_time(
     fallback_sh: bool,
     fallback_time: bool,
 ) -> anyhow::Result<TimeCmd> {
+    println!("try_new_gnu_time {} {}", fallback_sh, fallback_time);
     TimeCmd::try_new_with_command(
         &if fallback_sh {
             "sh".to_string()
