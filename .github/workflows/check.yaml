@@ -46,11 +46,11 @@ jobs:
       matrix:
         rust:
           - 1.63.0 # MSRV
-          - beta
-          - nightly
+          # - beta
+          # - nightly
         os:
           - macos-latest
-          - ubuntu-latest
+          # - ubuntu-latest
           # - windows-latest
     steps:
     - uses: actions/checkout@v3
@@ -67,6 +67,6 @@ jobs:
     - name: Build
       run: cargo check --verbose --release
     - name: Test
-      run: cargo test --verbose
+      run: cargo test --verbose -- --nocapture
       continue-on-error: ${{ matrix.rust == 'nightly' }}
       shell: bash

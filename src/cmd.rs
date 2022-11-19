@@ -537,6 +537,7 @@ impl TimeCmd {
 
 /// Execute program.
 fn execute(program: &str, args: &[&str]) -> anyhow::Result<std::process::Child> {
+    println!("[EXEC] {} {}", program, args.join(" "));
     std::process::Command::new(program)
         .args(args)
         .stdout(std::process::Stdio::null())
