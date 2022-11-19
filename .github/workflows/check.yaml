@@ -39,7 +39,7 @@ jobs:
   #     run: tools/check_readme.sh
 
   build:
-    needs: [ lint ]
+    # needs: [ lint ]
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
@@ -69,4 +69,3 @@ jobs:
     - name: Test
       run: cargo test --verbose -- --nocapture
       continue-on-error: ${{ matrix.rust == 'nightly' }}
-      shell: bash
