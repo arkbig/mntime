@@ -6,9 +6,12 @@ cd "$ROOTDIR"
 
 # parse args
 FIX=0
+CHECK=0
 while [ "$1" != "" ]; do
     if [ "$1" = "--fix" ]; then
         FIX=1
+    elif [ "$1" = "--check" ]; then
+        CHECK=1
     fi
     shift
 done
@@ -20,7 +23,11 @@ tools/check_readme.sh
 
 cargo audit
 
-cargo fmt
+if [ $CHECK -eq 0 ]; then
+    cargo fmt
+else
+    cargo fmt --check
+fi
 
 set +x
 # cargo clippy returns exit code 0 even with warnings.
