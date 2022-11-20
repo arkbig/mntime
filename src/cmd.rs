@@ -260,7 +260,6 @@ pub fn try_new_builtin_time(
         CmdType::Builtin,
         &cli_args.builtin,
         |err_msg| {
-            println!("${:?}", err_msg);
             let mut meas_items = HashMap::<MeasItem, f64>::new();
             let re = builtin_re();
             for cap in re.captures_iter(err_msg) {

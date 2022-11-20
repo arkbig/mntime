@@ -92,6 +92,7 @@ fn execution_count_change_is_supported() {
         .stdout(predicates::str::contains("/3 "));
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_change_is_supported() {
     mntime()
