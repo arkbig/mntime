@@ -14,43 +14,43 @@ permissions:
   pull-requests: write
 
 jobs:
-  # lint:
-  #   timeout-minutes: 10
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - uses: actions/checkout@v3
-  #   - uses: actions/cache@v3
-  #     with:
-  #       path: ~/.cargo/
-  #       key: ${{ runner.os }}-cargo-lint
-  #   - name: Install cargo-audit
-  #     run: cargo install cargo-audit
-  #   - name: Audit
-  #     run: cargo audit
-  #   - name: Format
-  #     run: cargo fmt --check --verbose
-  #   - name: Lint
-  #     run: cargo clippy
-  #   - name: Documentation
-  #     run: cargo doc
-  #   - name: Install cargo-license
-  #     run: cargo install cargo-license
-  #   - name: Check README
-  #     run: tools/check_readme.sh
+  lint:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: ~/.cargo/
+        key: ${{ runner.os }}-cargo-lint
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+    - name: Audit
+      run: cargo audit
+    - name: Format
+      run: cargo fmt --check --verbose
+    - name: Lint
+      run: cargo clippy
+    - name: Documentation
+      run: cargo doc
+    - name: Install cargo-license
+      run: cargo install cargo-license
+    - name: Check README
+      run: tools/check_readme.sh
 
   build:
-    # needs: [ lint ]
+    needs: [ lint ]
     timeout-minutes: 10
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         rust:
           - 1.63.0 # MSRV
-          # - beta
-          # - nightly
+          - beta
+          - nightly
         os:
-          # - macos-latest
-          # - ubuntu-latest
+          - macos-latest
+          - ubuntu-latest
           - windows-latest
     steps:
     - uses: actions/checkout@v3
