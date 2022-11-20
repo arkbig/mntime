@@ -260,6 +260,7 @@ pub fn try_new_builtin_time(
         CmdType::Builtin,
         &cli_args.builtin,
         |err_msg| {
+            println!("[ERROR]{}", err_msg);
             let mut meas_items = HashMap::<MeasItem, f64>::new();
             let re = builtin_re();
             for cap in re.captures_iter(err_msg) {
@@ -490,7 +491,6 @@ impl TimeCmd {
         if self.ready_status == ReadyStatus::Checking && self.is_finished() {
             let err_msg = stderr(&mut self.process);
             if (self.parse_meas_items)(err_msg.as_str()).is_empty() {
-                println!("[ERROR]{}", err_msg);
                 self.ready_status = ReadyStatus::Error;
             } else {
                 self.ready_status = ReadyStatus::Ready;
