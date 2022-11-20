@@ -1,10 +1,10 @@
 [package]
 name = "mntime"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.63.0"
 authors = ["arkbig"]
-description = "The mntime command executes the specified \"m\" commands \"n\" times and calculates the mean \"μ\"(\\mu) of usage time and memory."
+description = "Execute \"m\" commands \"n\" times to calculate mean of usage time and memory. As an alternative to \"time\", \"gnu-time\" is used internally."
 readme = "README.md"
 repository = "https://github.com/arkbig/mntime"
 license = "Zlib"
