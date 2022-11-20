@@ -94,13 +94,9 @@ fn execution_count_change_is_supported() {
 
 #[test]
 fn shell_change_is_supported() {
-    let mut cmd = mntime();
-    if cfg!(windows) {
-        cmd.arg("--shell=cmd").arg("--shell-arg=/c");
-    } else {
-        cmd.arg("--shell=bash");
-    }
-    cmd.arg("--runs=1")
+    mntime()
+        .arg("--runs=1")
+        .arg("--shell=bash")
         .arg("echo dummy benchmark")
         .assert()
         .success();

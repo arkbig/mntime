@@ -490,6 +490,7 @@ impl TimeCmd {
         if self.ready_status == ReadyStatus::Checking && self.is_finished() {
             let err_msg = stderr(&mut self.process);
             if (self.parse_meas_items)(err_msg.as_str()).is_empty() {
+                println!("[ERROR]{}", err_msg);
                 self.ready_status = ReadyStatus::Error;
             } else {
                 self.ready_status = ReadyStatus::Ready;
