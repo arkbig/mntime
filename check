@@ -29,28 +29,18 @@ else
     cargo fmt --check
 fi
 
-set +x
 # cargo clippy returns exit code 0 even with warnings.
 # However, I want to return error if exists warnings.
 # In addition, warnings are printed even when --fix is specified.
 set +e
-exit_code=true
-if cargo clippy 2>&1 | grep "warning:" > /dev/null; then
-    if [ $FIX -eq 0 ]; then
-        exit_code=false
-    else
-        # Later fix, but print warnings
-        cargo clippy
-    fi
+cargo clippy
+if [ $FIX -ne 0 ]; then
+    cargo clippy --fix --allow-dirty > /dev/null 2>&1
 fi
-if [ $FIX -eq 0 ]; then
-    CMD_CLIPPY="cargo clippy"
-else
-    CMD_CLIPPY="cargo clippy --fix --allow-dirty"
+if cargo clippy 2>&1 | grep -cE "^(error:|warning:)" > /dev/null; then
+    exit 1
 fi
 set -e
-set -x
-$CMD_CLIPPY && $exit_code
 
 cargo test
 
