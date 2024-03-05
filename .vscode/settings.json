@@ -1,10 +1,12 @@
 {
     "cSpell.words": [
         "getrusage",
+        "hmarr",
         "kbytes",
         "mntime",
         "powi",
         "Queueable",
+        "ratatui",
         "repr",
         "stdev",
         "thiserror",

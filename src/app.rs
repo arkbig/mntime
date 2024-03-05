@@ -23,7 +23,7 @@ pub fn run() -> proc_exit::ExitResult {
     // for drawing thread
     let (draw_tx, draw_rx) = std::sync::mpsc::channel();
     let draw_tick_rate = std::time::Duration::from_millis(100);
-    let backend = tui::backend::CrosstermBackend::new(std::io::stdout());
+    let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
     let mut terminal = crate::terminal::Wrapper::new(backend);
 
     let mut ret = (proc_exit::Code::SUCCESS, None);
@@ -408,7 +408,7 @@ fn view_app<B>(
     cli_args: &crate::cli_args::CliArgs,
     terminal: &mut crate::terminal::Wrapper<B>,
 ) where
-    B: tui::backend::Backend,
+    B: ratatui::backend::Backend,
 {
     let mut draw_state = DrawState::default();
 
@@ -473,15 +473,13 @@ fn view_app<B>(
 }
 
 /// Draw loop.
-fn ui<B>(
-    f: &mut tui::Frame<B>,
+fn ui(
+    f: &mut ratatui::Frame,
     model: &SharedViewModel,
     state: &mut DrawState,
     cur_y: &mut u16,
     loops: u16,
-) where
-    B: tui::backend::Backend,
-{
+) {
     let mut _offset_y = 0;
     if state.measuring {
         _offset_y += draw_progress(f, model, state, cur_y, _offset_y, loops);
@@ -489,17 +487,14 @@ fn ui<B>(
     }
 }
 
-fn draw_progress<B>(
-    f: &mut tui::Frame<B>,
+fn draw_progress(
+    f: &mut ratatui::Frame,
     model: &SharedViewModel,
     state: &mut DrawState,
     cur_y: &mut u16,
     offset_y: u16,
     loops: u16,
-) -> u16
-where
-    B: tui::backend::Backend,
-{
+) -> u16 {
     let size = f.size();
     let height = 1;
     if size.height < offset_y + height {
@@ -510,13 +505,13 @@ where
         *cur_y -= 1;
     }
 
-    let rect = tui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
-    let chunks = tui::layout::Layout::default()
-        .direction(tui::layout::Direction::Horizontal)
+    let rect = ratatui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
+    let chunks = ratatui::layout::Layout::default()
+        .direction(ratatui::layout::Direction::Horizontal)
         .constraints(
             [
-                tui::layout::Constraint::Min(10),
-                tui::layout::Constraint::Percentage(100),
+                ratatui::layout::Constraint::Min(10),
+                ratatui::layout::Constraint::Percentage(100),
             ]
             .as_ref(),
         )
@@ -524,7 +519,7 @@ where
 
     let throbber = throbber_widgets_tui::Throbber::default()
         .label(format!("{:>3}/{:<3}", model.current_run, model.current_max))
-        .style(tui::style::Style::default().fg(tui::style::Color::Cyan))
+        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
         .throbber_set(throbber_widgets_tui::CLOCK)
         .use_type(throbber_widgets_tui::WhichUse::Spin);
     f.render_stateful_widget(throbber, chunks[0], &mut state.throbber);
@@ -553,8 +548,8 @@ where
             String::from("Measuring...")
         }
     };
-    let gauge = tui::widgets::Gauge::default()
-        .gauge_style(tui::style::Style::default().fg(tui::style::Color::Cyan))
+    let gauge = ratatui::widgets::Gauge::default()
+        .gauge_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
         .ratio(model.current_run as f64 / model.current_max as f64)
         .label(label);
     f.render_widget(gauge, chunks[1]);
@@ -562,17 +557,14 @@ where
     height
 }
 
-fn draw_summary_report<B>(
-    f: &mut tui::Frame<B>,
+fn draw_summary_report(
+    f: &mut ratatui::Frame,
     model: &SharedViewModel,
     _state: &mut DrawState,
     cur_y: &mut u16,
     offset_y: u16,
     loops: u16,
-) -> u16
-where
-    B: tui::backend::Backend,
-{
+) -> u16 {
     use crate::cmd::{meas_item_unit_value, MeasItem};
 
     let size = f.size();
@@ -585,20 +577,20 @@ where
         *cur_y -= 1;
     }
 
-    let rect = tui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
-    let chunks = tui::layout::Layout::default()
-        .direction(tui::layout::Direction::Horizontal)
+    let rect = ratatui::layout::Rect::new(0, *cur_y + offset_y, size.width, height);
+    let chunks = ratatui::layout::Layout::default()
+        .direction(ratatui::layout::Direction::Horizontal)
         .constraints(
             [
-                tui::layout::Constraint::Percentage(33),
-                tui::layout::Constraint::Percentage(33),
-                tui::layout::Constraint::Percentage(33),
+                ratatui::layout::Constraint::Percentage(33),
+                ratatui::layout::Constraint::Percentage(33),
+                ratatui::layout::Constraint::Percentage(33),
             ]
             .as_ref(),
         )
         .split(rect);
 
-    for (index, item) in vec![MeasItem::Real, MeasItem::User, MeasItem::Sys]
+    for (index, item) in [MeasItem::Real, MeasItem::User, MeasItem::Sys]
         .iter()
         .enumerate()
     {
@@ -609,7 +601,7 @@ where
             .copied()
             .collect();
         let stats = crate::stats::Stats::new(&samples);
-        let text = tui::widgets::Paragraph::new(tui::text::Spans::from(format!(
+        let text = ratatui::widgets::Paragraph::new(ratatui::text::Line::from(format!(
             "{} {} ± {}",
             item.as_ref(),
             meas_item_unit_value(item, stats.mean, loops),
@@ -626,7 +618,7 @@ fn print_reports<B>(
     reports: &[HashMap<crate::cmd::MeasItem, f64>],
     loops: u16,
 ) where
-    B: tui::backend::Backend,
+    B: ratatui::backend::Backend,
 {
     use crate::cmd::{meas_item_name, meas_item_name_max_width, meas_item_unit_value};
 
@@ -709,9 +701,9 @@ fn print_reports<B>(
     terminal.flush(true);
 }
 
-fn print_exit_status<B>(terminal: &mut crate::terminal::Wrapper<B>, samples: &Vec<f64>, loops: u16)
+fn print_exit_status<B>(terminal: &mut crate::terminal::Wrapper<B>, samples: &[f64], loops: u16)
 where
-    B: tui::backend::Backend,
+    B: ratatui::backend::Backend,
 {
     use crate::cmd::{meas_item_name, meas_item_name_max_width};
 

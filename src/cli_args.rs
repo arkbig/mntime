@@ -8,7 +8,7 @@ pub fn parse() -> CliArgs {
 use clap::Parser as _;
 /// Command Line Arguments
 #[derive(Debug, clap::Parser)]
-#[clap(author, version, about, long_about = None, setting = clap::builder::AppSettings::TrailingVarArg | clap::builder::AppSettings::DeriveDisplayOrder)]
+#[clap(author, version, about, long_about = None, trailing_var_arg = true)]
 pub struct CliArgs {
     /// Perform NUM runs for each command.
     #[clap(short, long, value_parser, value_name = "NUM", default_value_t = 10)]

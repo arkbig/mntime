@@ -34,7 +34,7 @@ pub struct Stats {
 #[allow(dead_code)]
 impl Stats {
     /// Statistical calculation and construction.
-    pub fn new(samples: &Vec<f64>) -> Self {
+    pub fn new(samples: &[f64]) -> Self {
         let sorted = sort_only_finite(samples);
         let nan_count = samples.len() - sorted.len();
         let mut instance = Self {

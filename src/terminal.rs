@@ -6,9 +6,9 @@ use std::io::Write as _;
 
 pub struct Wrapper<B>
 where
-    B: tui::backend::Backend,
+    B: ratatui::backend::Backend,
 {
-    terminal: Option<Box<tui::Terminal<B>>>,
+    terminal: Option<Box<ratatui::Terminal<B>>>,
 
     is_in_tty: bool,
     is_out_tty: bool,
@@ -17,14 +17,14 @@ where
 
 impl<B> Wrapper<B>
 where
-    B: tui::backend::Backend,
+    B: ratatui::backend::Backend,
 {
     pub fn new(backend: B) -> Self {
         let is_in_tty = atty::is(atty::Stream::Stdin);
         let is_out_tty = atty::is(atty::Stream::Stdout);
         let is_err_tty = atty::is(atty::Stream::Stderr);
         let terminal = if is_in_tty && is_out_tty {
-            if let Ok(t) = tui::Terminal::new(backend) {
+            if let Ok(t) = ratatui::Terminal::new(backend) {
                 Some(Box::new(t))
             } else {
                 None
@@ -40,7 +40,7 @@ where
         }
     }
 
-    pub fn terminal_mut(&mut self) -> Option<&mut tui::Terminal<B>> {
+    pub fn terminal_mut(&mut self) -> Option<&mut ratatui::Terminal<B>> {
         match &mut self.terminal {
             Some(t) => Some(t.as_mut()),
             None => None,
@@ -70,7 +70,7 @@ where
 
     pub fn draw_if_tty<F>(&mut self, f: F)
     where
-        F: FnOnce(&mut tui::Frame<B>),
+        F: FnOnce(&mut ratatui::Frame),
     {
         if self.is_out_tty && self.terminal.is_some() {
             self.terminal_mut().unwrap().draw(f).unwrap();
@@ -83,8 +83,8 @@ where
         self.draw_if_tty(|f| {
             let size = f.size();
             if cur_y < size.height {
-                let rect = tui::layout::Rect::new(0, cur_y, size.width, size.height - cur_y);
-                f.render_widget(tui::widgets::Clear, rect);
+                let rect = ratatui::layout::Rect::new(0, cur_y, size.width, size.height - cur_y);
+                f.render_widget(ratatui::widgets::Clear, rect);
             }
         });
         self.set_cursor(0, cur_y);
