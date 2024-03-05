@@ -16,7 +16,6 @@ name = "mntime_lib"
 
 [dependencies]
 anyhow = "1.0.80"
-atty = "0.2.14"
 clap = { version = "4.5.1", features = ["derive"] }
 crossterm = "0.27.0"
 num-format = "0.4.4"
