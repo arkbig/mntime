@@ -2,7 +2,7 @@
 //! This file provides the wrapping function for differences in standard input/output variations.
 
 use crossterm::QueueableCommand as _;
-use std::io::Write as _;
+use std::io::{IsTerminal as _, Write as _};
 
 pub struct Wrapper<B>
 where
@@ -20,9 +20,9 @@ where
     B: ratatui::backend::Backend,
 {
     pub fn new(backend: B) -> Self {
-        let is_in_tty = atty::is(atty::Stream::Stdin);
-        let is_out_tty = atty::is(atty::Stream::Stdout);
-        let is_err_tty = atty::is(atty::Stream::Stderr);
+        let is_in_tty = std::io::stdin().is_terminal();
+        let is_out_tty = std::io::stdout().is_terminal();
+        let is_err_tty = std::io::stderr().is_terminal();
         let terminal = if is_in_tty && is_out_tty {
             if let Ok(t) = ratatui::Terminal::new(backend) {
                 Some(Box::new(t))

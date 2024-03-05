@@ -214,7 +214,7 @@ cargo license --direct-deps-only --avoid-build-deps --avoid-dev-deps | awk -F ":
 |License|crate|
 |-|-|
 |Apache-2.0 OR MIT (7)| anyhow, clap, num-format, once_cell, proc-exit, regex, thiserror|
-|MIT (4)| atty, crossterm, ratatui, strum|
+|MIT (3)| crossterm, ratatui, strum|
 |Zlib (2)| mntime, throbber-widgets-tui|
 
 Chain dependencies crates:
@@ -229,8 +229,8 @@ cargo license --avoid-build-deps --avoid-dev-deps | awk -F ":" 'BEGIN {printf "|
 |Apache-2.0 OR Apache-2.0 WITH LLVM-exception OR MIT (1)| wasi|
 |Apache-2.0 OR BSD-2-Clause OR MIT (2)| zerocopy, zerocopy-derive|
 |Apache-2.0 OR BSL-1.0 (1)| ryu|
-|Apache-2.0 OR MIT (79)| ahash, allocator-api2, anstream, anstyle, anstyle-parse, anstyle-query, anstyle-wincon, anyhow, arrayvec, bitflags, bitflags, cassowary, cfg-if, clap, clap_builder, clap_derive, clap_lex, colorchoice, either, getrandom, hashbrown, heck, hermit-abi, indoc, itertools, itoa, libc, lock_api, log, num-format, once_cell, parking_lot, parking_lot_core, paste, ppv-lite86, proc-exit, proc-macro2, quote, rand, rand_chacha, rand_core, regex, regex-automata, regex-syntax, rustversion, scopeguard, signal-hook, signal-hook-mio, signal-hook-registry, smallvec, static_assertions, syn, syn, thiserror, thiserror-impl, unicode-segmentation, unicode-width, utf8parse, winapi, winapi-i686-pc-windows-gnu, winapi-x86_64-pc-windows-gnu, windows-sys, windows-sys, windows-targets, windows-targets, windows_aarch64_gnullvm, windows_aarch64_gnullvm, windows_aarch64_msvc, windows_aarch64_msvc, windows_i686_gnu, windows_i686_gnu, windows_i686_msvc, windows_i686_msvc, windows_x86_64_gnu, windows_x86_64_gnu, windows_x86_64_gnullvm, windows_x86_64_gnullvm, windows_x86_64_msvc, windows_x86_64_msvc|
-|MIT (13)| atty, castaway, compact_str, crossterm, crossterm_winapi, lru, mio, ratatui, redox_syscall, stability, strsim, strum, strum_macros|
+|Apache-2.0 OR MIT (78)| ahash, allocator-api2, anstream, anstyle, anstyle-parse, anstyle-query, anstyle-wincon, anyhow, arrayvec, bitflags, bitflags, cassowary, cfg-if, clap, clap_builder, clap_derive, clap_lex, colorchoice, either, getrandom, hashbrown, heck, indoc, itertools, itoa, libc, lock_api, log, num-format, once_cell, parking_lot, parking_lot_core, paste, ppv-lite86, proc-exit, proc-macro2, quote, rand, rand_chacha, rand_core, regex, regex-automata, regex-syntax, rustversion, scopeguard, signal-hook, signal-hook-mio, signal-hook-registry, smallvec, static_assertions, syn, syn, thiserror, thiserror-impl, unicode-segmentation, unicode-width, utf8parse, winapi, winapi-i686-pc-windows-gnu, winapi-x86_64-pc-windows-gnu, windows-sys, windows-sys, windows-targets, windows-targets, windows_aarch64_gnullvm, windows_aarch64_gnullvm, windows_aarch64_msvc, windows_aarch64_msvc, windows_i686_gnu, windows_i686_gnu, windows_i686_msvc, windows_i686_msvc, windows_x86_64_gnu, windows_x86_64_gnu, windows_x86_64_gnullvm, windows_x86_64_gnullvm, windows_x86_64_msvc, windows_x86_64_msvc|
+|MIT (12)| castaway, compact_str, crossterm, crossterm_winapi, lru, mio, ratatui, redox_syscall, stability, strsim, strum, strum_macros|
 |MIT OR Unlicense (2)| aho-corasick, memchr|
 |Zlib (2)| mntime, throbber-widgets-tui|
 

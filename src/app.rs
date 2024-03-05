@@ -1,7 +1,7 @@
 // Copyright © ArkBig
 //! This file provides application flow.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, io::IsTerminal as _, rc::Rc};
 use strum::IntoEnumIterator as _;
 
 /// The application is started and terminated.
@@ -49,7 +49,7 @@ pub fn run() -> proc_exit::ExitResult {
         });
 
         // Input monitoring.
-        let is_in_tty = atty::is(atty::Stream::Stdin);
+        let is_in_tty = std::io::stdin().is_terminal();
         while !updating_thread.is_finished() {
             if is_in_tty && crossterm::event::poll(update_tick_rate).unwrap() {
                 if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
@@ -98,7 +98,7 @@ impl Drop for CliFinalizer {
 ///
 /// This returns a CliFinalizer that implements Drop, so please be good.
 fn initialize_cli() -> Option<CliFinalizer> {
-    if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stderr) {
+    if std::io::stdout().is_terminal() && std::io::stderr().is_terminal() {
         // Automatic finalizer setup
         let default_panic_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |panic_info| {
@@ -124,7 +124,7 @@ fn initialize_cli() -> Option<CliFinalizer> {
 /// It can be called in duplicate, and even if some errors occur,
 /// all termination processing is performed anyway.
 fn finalize_cli() {
-    if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stderr) {
+    if std::io::stdout().is_terminal() && std::io::stderr().is_terminal() {
         // if let Err(err) = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)
         // {
         //     eprintln!("[ERROR] {}", err);
